@@ -70,6 +70,7 @@ temp_labels/
 
 # Model Weights
 *.pt
+!best_v2.pt
 *.pth
 *.onnx
 
