@@ -1,0 +1,7 @@
+# Google Colab Path
+path: /content/datasets/fire_smoke_data
+train: train/images
+val: val/images
+
+nc: 2
+names: ['fire', 'smoke']
