@@ -5,10 +5,10 @@ from email.message import EmailMessage
 from twilio.rest import Client  # Import Twilio (Install: pip install twilio)
 
 # --- TWILIO SMS CONFIGURATION ---
-TWILIO_SID = os.getenv("TWILIO_SID", "your_twilio_sid") 
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "your_twilio_auth_token")
-TWILIO_FROM_NUMBER = os.getenv("TWILIO_FROM_NUMBER", "+16095071587")
-USER_PHONE_NUMBER = os.getenv("USER_PHONE_NUMBER", "+918639004939")
+TWILIO_SID = os.getenv("TWILIO_SID", "")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
+TWILIO_FROM_NUMBER = os.getenv("TWILIO_FROM_NUMBER", "")
+USER_PHONE_NUMBER = os.getenv("USER_PHONE_NUMBER", "")
 # ------------------------------------------------
 
 def play_alarm():
@@ -46,9 +46,9 @@ def make_call_alert(severity, location_url):
 
 def send_email_alert(image_path, location=None):
     try:
-        EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS", "codewithpavan29@gmail.com")
-        EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "your_email_password")
-        TO_EMAIL = os.getenv("TO_EMAIL", "marikanttipavankumar0@gmail.com")
+        EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS", "")
+        EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
+        TO_EMAIL = os.getenv("TO_EMAIL", "")
  
         msg = EmailMessage()
         msg['Subject'] = "🔥 FIRE ALERT DETECTED!"
