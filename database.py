@@ -110,3 +110,79 @@ def log_detection(confidence, chaos_score, severity, zone, image_path, alert_sen
                 connection.close()
 
 
+def get_all_fire_events():
+    """Retrieves all fire events from the database."""
+    connection = get_db_connection()
+    if connection:
+        try:
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute("SELECT * FROM fire_events ORDER BY timestamp DESC")
+            events = cursor.fetchall()
+            return events
+        except Error as e:
+            print(f"❌ Failed to fetch events: {e}")
+            return []
+        finally:
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
+    return []
+
+def get_fire_event_by_id(event_id):
+    """Retrieves a single fire event by ID."""
+    connection = get_db_connection()
+    if connection:
+        try:
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute("SELECT * FROM fire_events WHERE id = %s", (event_id,))
+            event = cursor.fetchone()
+            return event
+        except Error as e:
+            print(f"❌ Failed to fetch event {event_id}: {e}")
+            return None
+        finally:
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
+    return None
+
+def get_analytics_stats():
+    """Retrieves aggregated statistics for the analytics dashboard."""
+    connection = get_db_connection()
+    stats = {
+        "total_events": 0,
+        "severity_counts": {"LOW": 0, "MEDIUM": 0, "HIGH": 0},
+        "avg_confidence": 0.0,
+        "zones": [] # Placeholder for future zone logic
+    }
+    
+    if connection:
+        try:
+            cursor = connection.cursor(dictionary=True)
+            
+            # Total Count
+            cursor.execute("SELECT COUNT(*) as total FROM fire_events")
+            stats["total_events"] = cursor.fetchone()['total']
+            
+            # Severity Counts
+            cursor.execute("SELECT severity, COUNT(*) as count FROM fire_events GROUP BY severity")
+            rows = cursor.fetchall()
+            for row in rows:
+                stats["severity_counts"][row['severity']] = row['count']
+                
+            # Average Confidence
+            cursor.execute("SELECT AVG(confidence) as avg_conf FROM fire_events")
+            result = cursor.fetchone()
+            if result['avg_conf']:
+                stats["avg_confidence"] = float(result['avg_conf'])
+                
+            return stats
+            
+        except Error as e:
+            print(f"❌ Failed to fetch stats: {e}")
+            return stats
+        finally:
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
+    return stats

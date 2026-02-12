@@ -1,7 +1,10 @@
 import cv2
 import time
 import json
-from flask import Flask, Response, jsonify, request
+from dotenv import load_dotenv
+load_dotenv()
+
+from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
 from ultralytics import YOLO
 import threading
@@ -11,7 +14,8 @@ import numpy as np
 # Import Alert Logic
 from alert import play_alarm, send_email_alert, make_call_alert
 from utils import save_fire_image, calculate_chaos, CHAOS_THRESHOLD, MIN_MOTION_PIXELS
-from database import init_db, log_detection
+from fpdf import FPDF
+from database import init_db, log_detection, get_all_fire_events, get_analytics_stats, get_fire_event_by_id
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for React frontend
@@ -288,9 +292,127 @@ def toggle_camera():
         return jsonify({"status": "success", "camera_active": camera_active})
     return jsonify({"status": "error"}), 400
 
+@app.route('/api/debug/db')
+def debug_db():
+    from database import get_db_connection
+    try:
+        conn = get_db_connection()
+        if conn and conn.is_connected():
+            return jsonify({"status": "connected", "db_name": conn.database, "user": conn.user})
+        return jsonify({"status": "failed", "reason": "Connection returned None"}), 500
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/analytics/stats', methods=['GET'])
+def get_analytics_data():
+    try:
+        stats = get_analytics_stats()
+        events = get_all_fire_events()
+        return jsonify({"stats": stats, "events": events})
+    except Exception as e:
+        print(f"Error in analytics stats: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/evidence/<path:filename>')
+def serve_evidence(filename):
+    return send_from_directory('evidence', filename)
+
+@app.route('/api/event/<int:event_id>', methods=['GET'])
+def get_event_details(event_id):
+    try:
+        event = get_fire_event_by_id(event_id)
+        if event:
+            return jsonify(event)
+        return jsonify({"error": "Event not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+        
+class PDF(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 12)
+        # self.cell(0, 10, 'Fire Sense - Analytics Report', 0, 1, 'C')
+        # self.ln(10)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+
+@app.route('/api/analytics/export', methods=['GET'])
+def export_analytics_pdf():
+    try:
+        events = get_all_fire_events()
+        stats = get_analytics_stats()
+        
+        pdf = PDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        
+        pdf.set_font("Arial", 'B', 16)
+        pdf.cell(200, 10, txt="FlareSense Analytics Report", ln=True, align='C')
+        pdf.ln(10)
+
+        # Summary Section
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(200, 10, txt="Executive Summary", ln=True)
+        pdf.set_font("Arial", size=12)
+        pdf.cell(200, 10, txt=f"Total Fire Events Detected: {stats['total_events']}", ln=True)
+        pdf.cell(200, 10, txt=f"High Severity Incidents: {stats['severity_counts'].get('HIGH', 0)}", ln=True)
+        pdf.cell(200, 10, txt=f"Medium Severity Incidents: {stats['severity_counts'].get('MEDIUM', 0)}", ln=True)
+        pdf.cell(200, 10, txt=f"Average Confidence Score: {stats.get('avg_confidence', 0):.2f}", ln=True)
+        pdf.ln(10)
+        
+        # Detailed Log Table
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(200, 10, txt="Recent Fire Events Log", ln=True)
+        pdf.set_font("Arial", 'B', 10)
+        
+        # Table Header
+        pdf.cell(40, 10, "Timestamp", 1)
+        pdf.cell(20, 10, "Severity", 1)
+        pdf.cell(20, 10, "Conf", 1)
+        pdf.cell(60, 10, "Location", 1)
+        pdf.ln()
+        
+        # Table Rows
+        pdf.set_font("Arial", size=10)
+        for event in events[:50]: # Limit to last 50 for PDF
+            timestamp = str(event['timestamp']) if event['timestamp'] else "N/A"
+            # Truncate timestamp if too long
+            if len(timestamp) > 19: timestamp = timestamp[:19]
+            
+            severity = str(event['severity'])
+            conf = f"{float(event['confidence']):.2f}"
+            
+            lat = event.get('latitude')
+            lon = event.get('longitude')
+            loc = "N/A"
+            if lat is not None and lon is not None:
+                loc = f"{float(lat):.4f}, {float(lon):.4f}"
+            
+            pdf.cell(40, 10, timestamp, 1)
+            pdf.cell(20, 10, severity, 1)
+            pdf.cell(20, 10, conf, 1)
+            pdf.cell(60, 10, loc, 1)
+            pdf.ln()
+            
+        # Save PDF to a temporary file
+        filename = "fire_analytics_report.pdf"
+        pdf.output(filename)
+        
+        # Read the file and return as response
+        with open(filename, "rb") as f:
+            data = f.read()
+            
+        return Response(data, mimetype="application/pdf", headers={"Content-Disposition": "attachment;filename=fire_analytics_report.pdf"})
+    except Exception as e:
+        print(f"PDF Export Error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':
+
     # Initialize Database
     init_db()
     # Run server
