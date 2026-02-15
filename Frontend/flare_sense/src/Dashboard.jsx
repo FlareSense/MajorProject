@@ -9,31 +9,39 @@ const Dashboard = () => {
     const [activeView, setActiveView] = useState('dashboard');
     const [selectedEventId, setSelectedEventId] = useState(null);
 
-    // System Data State
-    const [systemStatus, setSystemStatus] = useState({
-        detected: false,
-        severity: "None",
+    // System Data State (Dictionary: { "0": {...}, "1": {...} })
+    const [camerasStatus, setCamerasStatus] = useState({});
+
+    // Aggregated Status for Header
+    const [globalStatus, setGlobalStatus] = useState({
+        maxSeverity: "None",
+        totalFires: 0,
         message: "System Normal",
-        confidence: 0.0
+        avgConfidence: 0.0
     });
 
     const [alerts, setAlerts] = useState([]);
     const [analyticsData, setAnalyticsData] = useState(null);
 
-    // Camera State
-    const [cameraActive, setCameraActive] = useState(true);
-
-    const toggleCamera = () => {
-        const newState = !cameraActive;
-        setCameraActive(newState);
+    const toggleCamera = (camId, currentActive) => {
+        const newState = !currentActive;
+        // Optimistic update
+        setCamerasStatus(prev => ({
+            ...prev,
+            [camId]: { ...prev[camId], active: newState }
+        }));
 
         fetch('http://localhost:5000/api/camera/toggle', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ active: newState })
+            body: JSON.stringify({ id: Number(camId), active: newState })
         }).catch(err => {
             console.error("Camera Toggle Error:", err);
-            setCameraActive(!newState); // Revert on error
+            // Revert on error
+            setCamerasStatus(prev => ({
+                ...prev,
+                [camId]: { ...prev[camId], active: !newState }
+            }));
         });
     };
 
@@ -55,8 +63,6 @@ const Dashboard = () => {
         if ("geolocation" in navigator) {
             navigator.geolocation.getCurrentPosition(position => {
                 const { latitude, longitude } = position.coords;
-                // console.log("Location obtained:", latitude, longitude);
-
                 // Send location to Backend
                 fetch('http://localhost:5000/api/location', {
                     method: 'POST',
@@ -72,26 +78,54 @@ const Dashboard = () => {
             fetch('http://localhost:5000/api/status')
                 .then(res => res.json())
                 .then(data => {
-                    setSystemStatus(data);
+                    // data is { "0": {...}, "1": {...} }
+                    setCamerasStatus(data);
 
-                    // Add to local alerts log if fire is detected and not already logged recently
-                    if (data.detected) {
-                        const newAlert = {
-                            id: Date.now(),
-                            time: new Date().toLocaleTimeString(),
-                            message: data.message,
-                            type: data.severity === "High" ? 'critical' : 'warning'
-                        };
+                    // Aggregate Data for Header
+                    let maxSev = "None";
+                    let fireCount = 0;
+                    let totalConf = 0;
+                    let activeCams = 0;
+                    let newMessage = "System Normal";
 
-                        // Simple logic to avoid flooding the log (only add if last alert was > 5s ago)
-                        setAlerts(prev => {
-                            const last = prev[0];
-                            if (!last || (Date.now() - last.id > 5000)) {
-                                return [newAlert, ...prev].slice(0, 50); // Keep last 50
-                            }
-                            return prev;
-                        });
-                    }
+                    Object.entries(data).forEach(([id, status]) => {
+                        if (status.detected) {
+                            fireCount++;
+                            totalConf += status.confidence;
+                            if (status.severity === "High") maxSev = "High";
+                            else if (status.severity === "Medium" && maxSev !== "High") maxSev = "Medium";
+                            else if (status.severity === "Low" && maxSev === "None") maxSev = "Low";
+
+                            newMessage = status.message; // Use last message
+
+                            // Add Local Alert
+                            const newAlert = {
+                                id: Date.now() + Math.random(), // Unique ID
+                                time: new Date().toLocaleTimeString(),
+                                message: `[CAM ${id}] ${status.message}`,
+                                type: status.severity === "High" ? 'critical' : 'warning'
+                            };
+
+                            setAlerts(prev => {
+                                const last = prev[0];
+                                // Avoid spamming: Check if same message sent recently
+                                if (!last || (Date.now() - (last.timestamp || 0) > 5000) || last.message !== newAlert.message) {
+                                    newAlert.timestamp = Date.now();
+                                    return [newAlert, ...prev].slice(0, 50);
+                                }
+                                return prev;
+                            });
+                        }
+                        if (status.active) activeCams++;
+                    });
+
+                    setGlobalStatus({
+                        maxSeverity: maxSev,
+                        totalFires: fireCount,
+                        message: fireCount > 0 ? `WARNING: ${fireCount} Active Threats!` : "System Normal",
+                        avgConfidence: fireCount > 0 ? (totalConf / fireCount) : 0.0
+                    });
+
                 })
                 .catch(err => console.error("API Error:", err));
         }, 1000); // Check every second
@@ -99,11 +133,34 @@ const Dashboard = () => {
         return () => clearInterval(interval);
     }, [activeView]);
 
-    // Helper to determine status color
-    const getStatusColor = () => {
-        if (!systemStatus.detected) return "#4dff4d"; // Green
-        if (systemStatus.severity === "High") return "#ff4d4d"; // Red
+    // Helper to determine global status color
+    const getGlobalStatusColor = () => {
+        if (globalStatus.totalFires === 0) return "#4dff4d"; // Green
+        if (globalStatus.maxSeverity === "High") return "#ff4d4d"; // Red
         return "#ffa500"; // Orange
+    };
+
+    const handleFileUpload = (event, camId) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('id', camId);
+
+        fetch('http://localhost:5000/api/camera/config', {
+            method: 'POST',
+            body: formData
+        })
+            .then(res => res.json())
+            .then(data => {
+                console.log("Upload success:", data);
+                alert(`Source updated for Camera ${camId}`);
+            })
+            .catch(err => {
+                console.error("Upload error:", err);
+                alert("Failed to upload video.");
+            });
     };
 
     return (
@@ -111,7 +168,7 @@ const Dashboard = () => {
             {/* Sidebar / Navigation */}
             <nav className="glass-nav">
                 <div className="logo">
-                    <Flame color={getStatusColor()} size={32} />
+                    <Flame color={getGlobalStatusColor()} size={32} />
                     <h1>FlareSense</h1>
                 </div>
                 <div className="nav-links">
@@ -141,8 +198,8 @@ const Dashboard = () => {
                     </button>
                 </div>
                 <div className="system-status">
-                    <ShieldCheck size={20} color={getStatusColor()} />
-                    <span>{systemStatus.detected ? "THREAT DETECTED" : "Secure"}</span>
+                    <ShieldCheck size={20} color={getGlobalStatusColor()} />
+                    <span>{globalStatus.totalFires > 0 ? "THREAT DETECTED" : "Secure"}</span>
                 </div>
             </nav>
 
@@ -153,80 +210,118 @@ const Dashboard = () => {
                 <header className="stats-grid">
                     <div className="stat-card glass-panel">
                         <h3>Fire Intensity</h3>
-                        <span className={`count ${systemStatus.severity === 'High' ? 'critical' : ''}`}>
-                            {systemStatus.severity}
+                        <span className={`count ${globalStatus.maxSeverity === 'High' ? 'critical' : ''}`}>
+                            {globalStatus.maxSeverity}
                         </span>
                     </div>
                     <div className="stat-card glass-panel">
                         <h3>AI Diagnosis</h3>
-                        <span className="status-text">{systemStatus.message}</span>
+                        <span className="status-text">{globalStatus.message}</span>
                     </div>
                     <div className="stat-card glass-panel">
-                        <h3>Confidence</h3>
-                        <span className="count">{(systemStatus.confidence * 100).toFixed(0)}%</span>
+                        <h3>Avg Confidence</h3>
+                        <span className="count">{(globalStatus.avgConfidence * 100).toFixed(0)}%</span>
                     </div>
                 </header>
 
                 {/* Conditional View Rendering */}
                 <div className="content-grid">
 
-                    {/* VIEW: DASHBOARD & LIVE FEED (Shared for now) */}
+                    {/* VIEW: DASHBOARD & LIVE FEED */}
                     {(activeView === 'dashboard' || activeView === 'live') && (
                         <>
-                            <div className="video-section glass-panel">
+                            {/* MULTI-CAMERA GRID */}
+                            <div className="video-section glass-panel" style={{ gridColumn: '1 / -1' }}>
                                 <div className="panel-header">
-                                    <h2><Camera size={20} /> Real-Time Analysis</h2>
-                                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                        <button
-                                            onClick={toggleCamera}
-                                            style={{
-                                                background: cameraActive ? 'rgba(255, 50, 50, 0.2)' : 'rgba(50, 255, 50, 0.2)',
-                                                border: cameraActive ? '1px solid #ff3333' : '1px solid #33ff33',
-                                                color: cameraActive ? '#ff3333' : '#33ff33',
-                                                padding: '5px 10px',
-                                                borderRadius: '5px',
-                                                cursor: 'pointer',
-                                                fontWeight: 'bold',
-                                                fontSize: '0.8rem',
-                                                fontFamily: 'var(--font-body)',
-                                                textTransform: 'uppercase'
-                                            }}
-                                        >
-                                            {cameraActive ? 'Stop Camera' : 'Start Camera'}
-                                        </button>
-                                        <span className="live-badge" style={{
-                                            backgroundColor: getStatusColor(),
-                                            opacity: cameraActive ? 1 : 0.5,
-                                            animation: cameraActive && systemStatus.detected ? 'pulse Red 2s infinite' : 'none'
-                                        }}>
-                                            {cameraActive ? (systemStatus.detected ? "DETECTING" : "LIVE") : "OFFLINE"}
-                                        </span>
-                                    </div>
+                                    <h2><Camera size={20} /> Multi-Camera Analysis</h2>
                                 </div>
-                                <div className="video-wrapper">
-                                    <img
-                                        src="http://localhost:5000/video_feed"
-                                        alt="Live Feed"
-                                    />
 
-                                    {/* Overlay for Diagnosis */}
-                                    {systemStatus.detected && (
-                                        <div className="ai-overlay">
-                                            <h3>AI ANALYSIS:</h3>
-                                            <p className="big-text">{systemStatus.message}</p>
-                                            <p className="sub-text">
-                                                {systemStatus.severity === "High"
-                                                    ? "RECOMMENDATION: EVACUATE / AUTO-SUPPRESSION"
-                                                    : "RECOMMENDATION: MANUAL EXTINGUISHER OK"}
-                                            </p>
+                                <div className="camera-grid" style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+                                    gap: '20px',
+                                    width: '100%'
+                                }}>
+                                    {Object.entries(camerasStatus).map(([id, status]) => (
+                                        <div key={id} className="camera-feed-card" style={{
+                                            background: 'rgba(0,0,0,0.3)',
+                                            borderRadius: '10px',
+                                            overflow: 'hidden',
+                                            border: status.detected ? (status.severity === 'High' ? '2px solid red' : '2px solid orange') : '1px solid #333'
+                                        }}>
+                                            <div className="cam-header" style={{ padding: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)' }}>
+                                                <span style={{ fontWeight: 'bold' }}>CAM {id} <small style={{ color: '#aaa' }}>({status.location})</small></span>
+                                                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                                    {/* Upload Button */}
+                                                    <label style={{
+                                                        background: 'rgba(255, 255, 255, 0.1)',
+                                                        border: '1px solid #aaa',
+                                                        color: '#ddd',
+                                                        padding: '2px 8px',
+                                                        borderRadius: '4px',
+                                                        cursor: 'pointer',
+                                                        fontSize: '0.7rem'
+                                                    }}>
+                                                        UPLOAD
+                                                        <input
+                                                            type="file"
+                                                            accept="video/*"
+                                                            style={{ display: 'none' }}
+                                                            onChange={(e) => handleFileUpload(e, id)}
+                                                        />
+                                                    </label>
+
+                                                    <button
+                                                        onClick={() => toggleCamera(id, status.active)}
+                                                        style={{
+                                                            background: status.active ? 'rgba(255, 50, 50, 0.2)' : 'rgba(50, 255, 50, 0.2)',
+                                                            border: status.active ? '1px solid #ff3333' : '1px solid #33ff33',
+                                                            color: status.active ? '#ff3333' : '#33ff33',
+                                                            padding: '2px 8px',
+                                                            borderRadius: '4px',
+                                                            cursor: 'pointer',
+                                                            fontSize: '0.7rem'
+                                                        }}
+                                                    >
+                                                        {status.active ? 'STOP' : 'START'}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div style={{ position: 'relative', width: '100%', aspectRatio: '4/3' }}>
+                                                <img
+                                                    src={`http://localhost:5000/video_feed/${id}`}
+                                                    alt={`Cam ${id}`}
+                                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                    onError={(e) => { e.target.style.display = 'none' }}
+                                                />
+                                                {!status.active && (
+                                                    <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
+                                                        <span style={{ color: '#555' }}>CAMERA DISABLED</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Overlay */}
+                                                {status.detected && status.active && (
+                                                    <div className="ai-overlay" style={{ padding: '10px' }}>
+                                                        <p className="big-text" style={{ fontSize: '1rem' }}>{status.message}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    {Object.keys(camerasStatus).length === 0 && (
+                                        <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+                                            Loading Cameras...
                                         </div>
                                     )}
                                 </div>
                             </div>
 
-                            <div className="alerts-section glass-panel">
+                            <div className="alerts-section glass-panel" style={{ gridColumn: '1 / -1' }}>
                                 <div className="panel-header">
-                                    <h2><AlertTriangle size={20} /> Incident Log</h2>
+                                    <h2><AlertTriangle size={20} /> Global Incident Log</h2>
                                     <button className="clear-btn" onClick={() => setAlerts([])}>Clear</button>
                                 </div>
                                 <div className="alerts-list">
@@ -254,7 +349,6 @@ const Dashboard = () => {
                                             <span className="timestamp">{alert.time}</span>
                                             <span className="message">{alert.message} - {alert.type.toUpperCase()}</span>
                                         </div>
-                                        {/* Note: In real history from DB, we would have IDs. For local alerts, we don't have DB IDs yet unless we fetch. */}
                                     </div>
                                 ))}
                             </div>

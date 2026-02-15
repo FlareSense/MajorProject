@@ -10,6 +10,7 @@ from ultralytics import YOLO
 import threading
 import os
 import numpy as np
+from werkzeug.utils import secure_filename
 
 # Import Alert Logic
 from alert import play_alarm, send_email_alert, make_call_alert
@@ -20,6 +21,10 @@ from database import init_db, log_detection, get_all_fire_events, get_analytics_
 app = Flask(__name__)
 CORS(app)  # Enable CORS for React frontend
 
+# Configure Uploads
+UPLOAD_FOLDER = 'uploads'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
 # Load the new trained model
 model = YOLO("best_v2.pt")
 
@@ -27,55 +32,144 @@ model = YOLO("best_v2.pt")
 current_location = None # {lat: ..., lon: ...}
 last_alarm_time = 0
 ALARM_COOLDOWN = 60
-camera_active = True
 
-fire_status = {
-    "detected": False,
-    "confidence": 0.0,
-    "timestamp": None,
-    "location": "Camera 1 (Main)",
-    "severity": "None",
-    "count": 0,
-    "message": "System Normal",
-    "camera_active": True
-}
+# --- MULTI-CAMERA COMPONENT ---
+class CameraManager:
+    def __init__(self):
+        # Configuration: ID -> Source
+        # Source can be int (Webcam) or Str (IP URL or File Path) or None
+        self.camera_sources = {
+            0: 0,                   # Default Webcam
+            1: None                 # Placeholder for dynamic video
+        }
+        self.cameras = {}   # Holds cv2.VideoCapture objects
+        self.locks = {}     # Locks for thread safety per camera
+        
+        # Status per camera
+        self.fire_status = {}
+        for cam_id in self.camera_sources:
+            self.fire_status[cam_id] = {
+                "detected": False,
+                "confidence": 0.0,
+                "timestamp": None,
+                "location": f"Camera {cam_id}",
+                "severity": "None",
+                "count": 0,
+                "message": "System Normal",
+                "active": True
+            }
+            self.locks[cam_id] = threading.Lock()
+            # Only init if source is ready
+            if self.camera_sources[cam_id] is not None:
+                self.init_camera(cam_id, self.camera_sources[cam_id])
 
-def generate_frames():
-    global fire_status, last_alarm_time, current_location, camera_active
-    cap = cv2.VideoCapture(0)
-    
-    prev_gray = None # Initialize previous frame for optical flow
+    def init_camera(self, cam_id, source):
+        print(f"🔧 Initializing Camera {cam_id} (Source: {source})")
+        cap = cv2.VideoCapture(source)
+        if isinstance(source, int):
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        
+        if cap.isOpened():
+             self.cameras[cam_id] = cap
+        else:
+             print(f"❌ Error: Could not open source {source}")
 
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
-    while True:
-        if not camera_active:
-            if cap.isOpened():
-                cap.release()
-                print("📷 Camera Resource Released (Privacy Mode)")
+    def get_camera(self, cam_id):
+        if cam_id not in self.camera_sources:
+            return None
+        
+        # Lazy initialization or Re-initialization
+        with self.locks.get(cam_id, threading.Lock()):
+            # If camera object missing but source exists
+            if cam_id not in self.cameras and self.camera_sources[cam_id] is not None:
+                 self.init_camera(cam_id, self.camera_sources[cam_id])
             
-            # If camera is off, yield a placeholder (black frame)
+            # If camera closed (disconnected)
+            if cam_id in self.cameras and not self.cameras[cam_id].isOpened():
+                 if self.camera_sources[cam_id] is not None:
+                     self.init_camera(cam_id, self.camera_sources[cam_id])
+            
+            return self.cameras.get(cam_id)
+    
+    def update_source(self, cam_id, new_source):
+        print(f"🔄 Updating Camera {cam_id} Source -> {new_source}")
+        self.release_camera(cam_id)
+        self.camera_sources[cam_id] = new_source
+        # Re-init will happen on next get_camera call
+        
+        if cam_id in self.fire_status:
+             self.fire_status[cam_id]["message"] = "Source Updated"
+             self.fire_status[cam_id]["detected"] = False
+
+    def release_camera(self, cam_id):
+        if cam_id in self.cameras:
+            self.cameras[cam_id].release()
+            del self.cameras[cam_id]
+
+    def get_all_statuses(self):
+        return self.fire_status
+
+    def toggle_camera(self, cam_id, active):
+        if cam_id in self.fire_status:
+            self.fire_status[cam_id]['active'] = active
+            if not active:
+                self.release_camera(cam_id)
+            return True
+        return False
+
+# Initialize Global Manager
+camera_manager = CameraManager()
+
+
+def generate_frames(cam_id):
+    global last_alarm_time, current_location
+    
+    # Initialize prev_gray locally for this camera thread
+    prev_gray = None 
+    
+    while True:
+        status = camera_manager.fire_status.get(cam_id)
+        source = camera_manager.camera_sources.get(cam_id)
+        
+        # If disabled OR no source assigned yet
+        if not status or not status['active'] or source is None:
+            # Return placeholder
             blank_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-            cv2.putText(blank_frame, "CAMERA OFF", (200, 240), 
+            msg = "CAM OFF" if source is not None else "NO VIDEO SOURCE"
+            cv2.putText(blank_frame, f"CAM {cam_id}: {msg}", (50, 240), 
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (100, 100, 100), 2)
+            
+            # If waiting for upload, show instruction
+            if source is None and status['active']:
+                 cv2.putText(blank_frame, "Please Upload Video", (180, 290), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 1)
+
             ret, buffer = cv2.imencode('.jpg', blank_frame)
-            frame = buffer.tobytes()
             yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
             time.sleep(0.5)
             continue
-            
-        if not cap.isOpened():
-             print("📷 Camera Resource Re-acquired")
-             cap.open(0)
-             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+        cap = camera_manager.get_camera(cam_id)
+        if not cap or not cap.isOpened():
+             # print(f"⚠️ Camera {cam_id} disconnected or initializing...")
+             time.sleep(1)
+             continue
 
         success, frame = cap.read()
         if not success:
-            break
+            # If video file ends, loop it
+            if isinstance(source, str):
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                continue
+            else:
+                break
         
+        # Resize for consistent processing
+        frame = cv2.resize(frame, (640, 480))
+
+        # --- DETECTION LOGIC (Per Camera) ---
         # Run detection
         results = model(frame, verbose=False, conf=0.30)
         
@@ -85,13 +179,13 @@ def generate_frames():
         detected_in_frame = False
         detections_list = []
         max_conf = 0.0
-        max_conf = 0.0
         max_severity = "None"
         max_chaos = 0.0
         
         # Overlay for transparent drawing
         overlay = frame.copy()
         
+        # 1. YOLO Detection
         for result in results:
             for box in result.boxes:
                 cls = int(box.cls[0])
@@ -125,150 +219,167 @@ def generate_frames():
 
                     if prev_gray is not None:
                          # Perform Liveness/Chaos Check
-                         # Ensure coords are within bounds
                          h, w = gray.shape
                          cx1, cy1 = max(0, x1), max(0, y1)
                          cx2, cy2 = min(w, x2), min(h, y2)
                          
                          chaos, motion_mag = calculate_chaos(gray, prev_gray, cx1, cy1, cx2, cy2)
                          
-                         print(f"DEBUG: Chaos={chaos:.4f} (Thresh={CHAOS_THRESHOLD}), Motion={motion_mag:.4f} (Thresh=0.3)")
-
                          # Filter out static images or shaking photos
-                         # If it's static (low motion) OR organized motion (low chaos but high motion = shaking)
                          if motion_mag < 0.3:
                              severity = "Static (Fake)"
                              color = (255, 0, 0) # Blue
-                             # Don't mark as detected_in_frame if it's static
                              detected_in_frame = False 
-                             conf = 0.0 # Suppress confidence
+                             conf = 0.0 
                          elif chaos < CHAOS_THRESHOLD:
                              severity = "Shaking (Fake)"
                              color = (255, 165, 0) # Orange
                              detected_in_frame = False
                              conf = 0.0
                          else:
-                             # Real Fire!
                              detected_in_frame = True
                              max_chaos = chaos
 
-                    # If first frame or check passed (if we set detected_in_frame = True above)
-                    # Note: We rely on detected_in_frame flag primarily
-                    if severity in ["Static (Fake)", "Shaking (Fake)"]:
-                         # It was detected by YOLO but rejected by Liveness
-                         pass 
-                    else:
-                        # Re-evaluate severity based on coverage IF it is real
-                        pass # kept previous severity logic but we need to ensure detected_in_frame matches
-
                     detections_list.append({"severity": severity, "conf": conf})
 
-                    # DRAWING: Semi-transparent Fill
-                    # Draw filled box on overlay
+                    # Drawing
                     cv2.rectangle(overlay, (x1, y1), (x2, y2), color, -1) 
-                    
-                    # Text Label with Background
                     label_text = f"{severity.upper()} {conf:.2f}"
                     t_size = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
-                    cv2.rectangle(frame, (x1, y1 - t_size[1] - 10), (x1 + t_size[0] + 10, y1), color, -1)
-                    cv2.putText(frame, label_text, (x1 + 5, y1 - 5), 
+
+        # 2. SIMULATION FALLBACK (If no AI detection)
+        # If this is the simulated camera (ID 1) and no YOLO fire found, check for the red circle
+        if not detected_in_frame and cam_id == 1:
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            # Red color range
+            lower_red1 = np.array([0, 70, 50])
+            upper_red1 = np.array([10, 255, 255])
+            lower_red2 = np.array([170, 70, 50])
+            upper_red2 = np.array([180, 255, 255])
+            
+            mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
+            mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+            mask = mask1 | mask2
+            
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            for cnt in contours:
+                area = cv2.contourArea(cnt)
+                if area > 500: # Threshold for the "red dot"
+                    detected_in_frame = True
+                    max_severity = "High" # Simulated is always high alert
+                    max_conf = 0.99
+                    x, y, w, h = cv2.boundingRect(cnt)
+                    
+                    # Draw visual indicator
+                    cv2.rectangle(overlay, (x, y), (x+w, y+h), (0, 0, 255), -1)
+                    sim_label = "SIMULATED FIRE"
+                    t_size = cv2.getTextSize(sim_label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
+                    cv2.rectangle(overlay, (x, y - t_size[1] - 10), (x + t_size[0] + 10, y), (0, 0, 255), -1)
+                    cv2.putText(overlay, sim_label, (x + 5, y - 5), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-                                
-                    # Draw Border on original frame (to keep edges sharp)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                    cv2.rectangle(overlay, (x, y), (x+w, y+h), (0, 0, 255), 2)
 
         # Apply transparency
         if detected_in_frame:
             alpha = 0.35
             frame = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
 
-        # Update global status
-        if detected_in_frame:
-            fire_status["detected"] = True
-            fire_status["confidence"] = float(max_conf)
-            fire_status["timestamp"] = time.time()
-            fire_status["severity"] = max_severity
-            fire_status["count"] = len(detections_list)
-            
-            if max_severity == "High":
-                fire_status["message"] = f"CRITICAL: {len(detections_list)} FIRE(S) DETECTED!"
+        # Update global status for this camera
+        with camera_manager.locks[cam_id]:
+            if detected_in_frame:
+                status["detected"] = True
+                status["confidence"] = float(max_conf)
+                status["timestamp"] = time.time()
+                status["severity"] = max_severity
+                status["count"] = len(detections_list)
+                
+                if max_severity == "High":
+                    status["message"] = f"CRITICAL: {len(detections_list)} FIRE(S) ON CAM {cam_id}!"
+                else:
+                    status["message"] = f"Warning: Fire Visible on Cam {cam_id}"
+
+                # Alert Logic (Trigger only if REAL Fire)
+                current_time = time.time()
+                if current_time - last_alarm_time > ALARM_COOLDOWN:
+                    print(f"🔥 CAM {cam_id} Triggered Alert! Severity: {max_severity}")
+                    
+                    loc_url = "GPS Unavailable"
+                    if current_location:
+                        loc_url = f"https://maps.google.com/?q={current_location['lat']},{current_location['lon']}"
+
+                    threading.Thread(target=play_alarm, daemon=True).start()
+                    img_path = save_fire_image(frame)
+                    
+                    threading.Thread(target=send_email_alert, args=(img_path, current_location), daemon=True).start()
+                    threading.Thread(target=make_call_alert, args=(max_severity, loc_url), daemon=True).start()
+                    
+                    # Log to DB
+                    db_severity = "HIGH"
+                    if max_severity.lower() == "medium": db_severity = "MEDIUM"
+                    if max_severity.lower() == "low": db_severity = "LOW"
+                    
+                    threading.Thread(target=log_detection, args=(
+                        max_conf, max_chaos, db_severity, f"Camera {cam_id}", img_path, True, 
+                        current_location['lat'] if current_location else None, 
+                        current_location['lon'] if current_location else None, 
+                        loc_url
+                    ), daemon=True).start()
+
+                    last_alarm_time = current_time
             else:
-                 fire_status["message"] = f"Warning: {len(detections_list)} Fire(s) Visible"
-
-            # Alert Logic
-            current_time = time.time()
-            if current_time - last_alarm_time > ALARM_COOLDOWN:
-                print(f"🔥 Alert Triggered! Severity: {max_severity}")
-                
-                # Generate Google Maps URL
-                loc_url = "GPS Unavailable"
-                if current_location:
-                    loc_url = f"https://maps.google.com/?q={current_location['lat']},{current_location['lon']}"
-
-                threading.Thread(target=play_alarm, daemon=True).start()
-                img_path = save_fire_image(frame)
-                
-                # Send Notifications (Email + Voice Call)
-                threading.Thread(target=send_email_alert, args=(img_path, current_location), daemon=True).start()
-                threading.Thread(target=make_call_alert, args=(max_severity, loc_url), daemon=True).start()
-                
-                # Log to MySQL Database
-                print("DEBUG: Triggering Database Log...")
-                lat = current_location['lat'] if current_location else None
-                lon = current_location['lon'] if current_location else None
-                
-                # We map max_severity to LOW/MEDIUM/HIGH for ENUM compatibility
-                db_severity = "HIGH"
-                if max_severity.lower() == "medium": db_severity = "MEDIUM"
-                if max_severity.lower() == "low": db_severity = "LOW"
-
-                # Calculate chaos for the FIRST detected box just for logging (approximate)
-                # In reality we iterate multiple boxes, but we'll log the "event"
-                # We can use the last calculated chaos from the loop above if available, 
-                # but 'chaos' variable scope might be inside loop. 
-                # Let's assume high chaos if it triggered 'High/Real Fire'.
-                # To be precise, we should have captured specific chaos of the triggering box.
-                # For now, we will log the chaos of the last processed box or a default high value.
-                log_chaos = max_chaos # Use actual captured chaos
-                
-                threading.Thread(target=log_detection, args=(
-                    max_conf, 
-                    log_chaos, 
-                    db_severity, 
-                    "Camera 1", 
-                    img_path, 
-                    True, # Alert Sent
-                    lat, 
-                    lon, 
-                    loc_url
-                ), daemon=True).start()
-
-                last_alarm_time = current_time
-        else:
-            if fire_status["timestamp"] and (time.time() - fire_status["timestamp"] > 3):
-                fire_status["detected"] = False
-                fire_status["confidence"] = 0.0
-                fire_status["severity"] = "None"
-                fire_status["count"] = 0
-                fire_status["message"] = "System Normal"
+                # Reset if no fire for 3 seconds
+                if status["timestamp"] and (time.time() - status["timestamp"] > 3):
+                    status["detected"] = False
+                    status["confidence"] = 0.0
+                    status["severity"] = "None"
+                    status["count"] = 0
+                    status["message"] = "System Normal"
 
         # Encode frame
         ret, buffer = cv2.imencode('.jpg', frame)
         frame = buffer.tobytes()
         
-        # Update prev_gray
         prev_gray = gray.copy()
 
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
-@app.route('/video_feed')
-def video_feed():
-    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/api/camera/config', methods=['POST'])
+def configure_camera():
+    print(f"📥 Received camera config request: {request.form}")
+    if 'file' not in request.files:
+        print("❌ No file part in request")
+        return jsonify({"error": "No file part"}), 400
+    file = request.files['file']
+    cam_id = int(request.form.get('id', 1))
+    
+    if file.filename == '':
+        print("❌ No selected file")
+        return jsonify({"error": "No selected file"}), 400
+        
+    if file:
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        print(f"💾 Saving file to: {filepath}")
+        file.save(filepath)
+        
+        # Update Camera Manager
+        print(f"🔄 Updating Camera {cam_id} source to {filepath}")
+        camera_manager.update_source(cam_id, filepath)
+        
+        return jsonify({"status": "success", "message": f"Camera {cam_id} source updated to {filename}"})
+
+@app.route('/video_feed/<int:cam_id>')
+def video_feed(cam_id):
+    if cam_id not in camera_manager.camera_sources:
+        return "Camera Not Found", 404
+    return Response(generate_frames(cam_id), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/api/status')
 def get_status():
-    return jsonify(fire_status)
+    return jsonify(camera_manager.get_all_statuses())
 
 @app.route('/api/location', methods=['POST'])
 def update_location():
@@ -276,21 +387,21 @@ def update_location():
     data = request.json
     if data and 'lat' in data and 'lon' in data:
         current_location = data
-        print(f"📍 Location Updated: {current_location['lat']}, {current_location['lon']}")
+        # print(f"📍 Location Updated: {current_location['lat']}, {current_location['lon']}")
         return jsonify({"status": "updated", "location": current_location})
     return jsonify({"status": "error"}), 400
 
 @app.route('/api/camera/toggle', methods=['POST'])
-def toggle_camera():
-    global camera_active
+def toggle_camera_route():
     data = request.json
-    if 'active' in data:
-        camera_active = data['active']
-        fire_status['camera_active'] = camera_active
-        status_msg = "ON" if camera_active else "OFF"
-        print(f"📷 Camera toggled {status_msg}")
-        return jsonify({"status": "success", "camera_active": camera_active})
-    return jsonify({"status": "error"}), 400
+    cam_id = data.get('id', 0)
+    active = data.get('active', True)
+    
+    if camera_manager.toggle_camera(cam_id, active):
+        status_msg = "ON" if active else "OFF"
+        print(f"📷 Camera {cam_id} toggled {status_msg}")
+        return jsonify({"status": "success", "camera_id": cam_id, "active": active})
+    return jsonify({"status": "error", "message": "Camera not found"}), 400
 
 @app.route('/api/debug/db')
 def debug_db():
