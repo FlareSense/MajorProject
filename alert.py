@@ -3,12 +3,16 @@ import smtplib
 import os
 from email.message import EmailMessage
 from twilio.rest import Client  # Import Twilio (Install: pip install twilio)
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # --- TWILIO SMS CONFIGURATION ---
-TWILIO_SID = os.getenv("TWILIO_SID", "")
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
-TWILIO_FROM_NUMBER = os.getenv("TWILIO_FROM_NUMBER", "")
-USER_PHONE_NUMBER = os.getenv("USER_PHONE_NUMBER", "")
+TWILIO_SID = os.getenv("TWILIO_SID") 
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_FROM_NUMBER = os.getenv("TWILIO_FROM_NUMBER")
+USER_PHONE_NUMBER = os.getenv("USER_PHONE_NUMBER")
 # ------------------------------------------------
 
 def play_alarm():
@@ -46,10 +50,13 @@ def make_call_alert(severity, location_url):
 
 def send_email_alert(image_path, location=None):
     try:
-        EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS", "")
-        EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
-        TO_EMAIL = os.getenv("TO_EMAIL", "")
- 
+        EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
+        EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+        TO_EMAIL = os.getenv("TO_EMAIL")
+
+        if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
+            print("❌ Email credentials missing in .env file (EMAIL_ADDRESS or EMAIL_PASSWORD)")
+            return
         msg = EmailMessage()
         msg['Subject'] = "🔥 FIRE ALERT DETECTED!"
         msg['From'] = EMAIL_ADDRESS
@@ -78,5 +85,11 @@ def send_email_alert(image_path, location=None):
 
         print("[EMAIL SENT] Fire alert email delivered.")
 
+    except smtplib.SMTPAuthenticationError:
+        print("\n❌ EMAIL LOGIN FAILED: Username and Password not accepted.")
+        print("👉 Solution: You must use an 'App Password' if 2-Step Verification is enabled.")
+        print("   1. Go to https://myaccount.google.com/security")
+        print("   2. Search for 'App Passwords'")
+        print("   3. Generate a new password and update EMAIL_PASSWORD in .env\n")
     except Exception as e:
-        print("[EMAIL ERROR]", e)
+        print(f"[EMAIL ERROR] {e}")

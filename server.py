@@ -17,7 +17,7 @@ app = Flask(__name__)
 CORS(app)  # Enable CORS for React frontend
 
 # Load the new trained model
-model = YOLO("best_v2.pt")
+model = YOLO("best_v3.pt")
 
 # Global variables
 current_location = None # {lat: ..., lon: ...}
