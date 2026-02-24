@@ -71,8 +71,11 @@ temp_labels/
 # Model Weights
 *.pt
 !best_v2.pt
+!best_v3.pt
 *.pth
 *.onnx
+!best_v3.onnx
+!yolov8n.onnx
 
 # Media
 *.wav
