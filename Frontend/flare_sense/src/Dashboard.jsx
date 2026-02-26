@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Flame, AlertTriangle, Activity, Camera, ShieldCheck, Thermometer, Users, Box } from 'lucide-react';
+import { Flame, AlertTriangle, Activity, Camera, ShieldCheck, Thermometer, Users, Box, Map as MapIcon, Download } from 'lucide-react';
 import SpatialMap from './SpatialMap';
+import AnalyticsMap from './components/AnalyticsMap';
+import FireDetailsModal from './components/FireDetailsModal';
 
 const Dashboard = () => {
     // Navigation State
@@ -11,6 +13,10 @@ const Dashboard = () => {
     const [systemStatus, setSystemStatus] = useState({});
 
     const [alerts, setAlerts] = useState([]);
+
+    // Analytics State
+    const [analyticsData, setAnalyticsData] = useState(null);
+    const [selectedEventId, setSelectedEventId] = useState(null);
 
     const toggleCamera = (cameraId) => {
         const currentActive = systemStatus[cameraId]?.camera_active !== false;
@@ -39,8 +45,20 @@ const Dashboard = () => {
             .catch(err => console.error("Error fetching cameras:", err));
     }, []);
 
+    // Fetch Analytics Data
+    const fetchAnalytics = () => {
+        fetch('http://localhost:5000/api/analytics/stats')
+            .then(res => res.json())
+            .then(data => setAnalyticsData(data))
+            .catch(err => console.error("Analytics Error:", err));
+    };
+
     // Poll Backend API for real-time status
     useEffect(() => {
+        if (activeView === 'analytics') {
+            fetchAnalytics();
+        }
+
         if ("geolocation" in navigator) {
             navigator.geolocation.getCurrentPosition(position => {
                 const { latitude, longitude } = position.coords;
@@ -86,7 +104,7 @@ const Dashboard = () => {
         }, 1000);
 
         return () => clearInterval(interval);
-    }, []);
+    }, [activeView]);
 
     // Helper to determine OVERALL status
     const isAnyThreatDetected = Object.values(systemStatus).some(cam => cam?.detected);
@@ -138,6 +156,12 @@ const Dashboard = () => {
                         onClick={() => setActiveView('history')}
                     >
                         <AlertTriangle size={20} /> History
+                    </button>
+                    <button
+                        className={activeView === 'analytics' ? 'active' : ''}
+                        onClick={() => setActiveView('analytics')}
+                    >
+                        <MapIcon size={20} /> Analytics
                     </button>
                 </div>
                 <div className="system-status">
@@ -265,7 +289,7 @@ const Dashboard = () => {
                             <SpatialMap systemStatus={systemStatus} cameras={cameras} />
                         </div>
                     )}
-                    
+
                     {/* VIEW: HISTORY */}
                     {activeView === 'history' && (
                         <div className="glass-panel" style={{ gridColumn: '1 / -1' }}>
@@ -282,8 +306,84 @@ const Dashboard = () => {
                         </div>
                     )}
 
+                    {/* VIEW: ANALYTICS */}
+                    {activeView === 'analytics' && analyticsData && (
+                        <div className="glass-panel" style={{ gridColumn: '1 / -1', minHeight: '80vh' }}>
+                            <div className="panel-header" style={{ marginBottom: '20px' }}>
+                                <h2><Activity size={20} /> Fire Analytics & Zone Classification</h2>
+                                <button
+                                    className="clear-btn"
+                                    style={{ background: '#00aaff', border: 'none', color: 'white' }}
+                                    onClick={() => window.location.href = 'http://localhost:5000/api/analytics/export'}
+                                >
+                                    <Download size={16} /> Download Report (PDF)
+                                </button>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: '20px' }}>
+                                {/* Map Section */}
+                                <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '15px' }}>
+                                    <h3 style={{ marginBottom: '10px', color: '#ccc' }}>Geospatial Heatmap</h3>
+                                    <AnalyticsMap events={analyticsData.events} />
+                                    <div style={{ marginTop: '10px', display: 'flex', gap: '15px', fontSize: '0.8rem', color: '#aaa' }}>
+                                        <span style={{ color: '#ff4d4d' }}>🔴 High Severity (Red Zone)</span>
+                                        <span style={{ color: '#ffa500' }}>🟠 Medium Severity (Orange Zone)</span>
+                                        <span style={{ color: '#4dff4d' }}>🟢 Low Severity (Green Zone)</span>
+                                    </div>
+                                </div>
+
+                                {/* Stats Column */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                    <div className="glass-panel" style={{ padding: '15px', background: 'rgba(255,255,255,0.05)' }}>
+                                        <h4>Total Incidents</h4>
+                                        <span style={{ fontSize: '2rem', fontWeight: 'bold' }}>{analyticsData.stats.total_events}</span>
+                                    </div>
+                                    <div className="glass-panel" style={{ padding: '15px', background: 'rgba(255, 77, 77, 0.1)' }}>
+                                        <h4 style={{ color: '#ff4d4d' }}>High Severity</h4>
+                                        <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ff4d4d' }}>
+                                            {analyticsData.stats.severity_counts.HIGH || 0}
+                                        </span>
+                                    </div>
+                                    <div className="glass-panel" style={{ padding: '15px', background: 'rgba(255, 165, 0, 0.1)' }}>
+                                        <h4 style={{ color: '#ffa500' }}>Medium Severity</h4>
+                                        <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ffa500' }}>
+                                            {analyticsData.stats.severity_counts.MEDIUM || 0}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Detailed List */}
+                            <div style={{ marginTop: '30px' }}>
+                                <h3>Recent Events</h3>
+                                <div className="alerts-list">
+                                    {analyticsData.events.slice(0, 10).map((event, index) => (
+                                        <div key={index} className="alert-item" style={{ borderLeft: `4px solid ${event.severity === 'HIGH' ? '#ff4d4d' : 'orange'}` }}>
+                                            <span className="timestamp">{new Date(event.timestamp).toLocaleString()}</span>
+                                            <span className="message">Detected at {event.latitude?.toFixed(4) || "Unknown"}, {event.longitude?.toFixed(4) || "Unknown"}</span>
+                                            <button
+                                                onClick={() => setSelectedEventId(event.id)}
+                                                style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #aaa', color: '#aaa', borderRadius: '5px', padding: '2px 8px', cursor: 'pointer' }}
+                                            >
+                                                View Details
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                 </div>
             </main>
+
+            {/* Modal */}
+            {selectedEventId && (
+                <FireDetailsModal
+                    eventId={selectedEventId}
+                    onClose={() => setSelectedEventId(null)}
+                />
+            )}
         </div>
     );
 };

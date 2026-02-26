@@ -422,3 +422,30 @@ body::before {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--accent-blue);
 }
+
+/* CYBERPUNK 3D MAP ANIMATIONS */
+@keyframes pulse {
+  0% {
+    opacity: 0.5;
+    transform: scaleX(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: scaleX(1);
+    box-shadow: 0 0 15px currentColor;
+  }
+}
+
+.holo-ui-wrapper {
+  pointer-events: none;
+  animation: holoHover 4s ease-in-out infinite alternate;
+}
+
+@keyframes holoHover {
+  0% {
+    transform: translateY(0px);
+  }
+  100% {
+    transform: translateY(-10px);
+  }
+}

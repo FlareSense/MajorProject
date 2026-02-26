@@ -11,12 +11,15 @@ import numpy as np
 # Import Alert Logic
 from alert import play_alarm, send_email_alert, make_call_alert, send_telegram_alert, send_whatsapp_alert
 from utils import save_fire_image, calculate_chaos, CHAOS_THRESHOLD, MIN_MOTION_PIXELS
-from database import init_db, log_detection
+from database import init_db, log_detection, get_all_fire_events, get_analytics_stats, get_fire_event_by_id
+from fpdf import FPDF
+from flask import send_from_directory
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for React frontend
 
 # Load the exported ONNX models for hardware acceleration (Higher FPS)
+# We reverted to the standard OPSET 17 versions but NOT 320x320 as it degrades accuracy
 fire_model = YOLO("best_v3.onnx")
 person_model = YOLO("yolov8n.onnx") # Standard YOLO model for person detection
 
@@ -64,9 +67,18 @@ def generate_frames(camera_id):
         
     cam_info = AVAILABLE_CAMERAS[camera_id]
     source = cam_info["source"]
-    cap = cv2.VideoCapture(source)
+    
+    # Use DirectShow backend on Windows for local webcams to prevent hanging
+    if isinstance(source, int) and os.name == 'nt':
+        cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
+    else:
+        cap = cv2.VideoCapture(source)
     
     prev_gray = None # Initialize previous frame for optical flow
+    frame_count = 0
+    PROCESS_EVERY_N_FRAMES = 2 # Process every 2nd frame for higher FPS
+    TARGET_FPS = 8 # Lowered hard limit to prevent 100% CPU loops on 2 cameras
+    FRAME_DELAY = 1.0 / TARGET_FPS
 
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
@@ -92,37 +104,48 @@ def generate_frames(camera_id):
             
         if not cap.isOpened():
              print(f"📷 Camera {camera_id} Resource Re-acquired")
-             cap.open(source)
+             if isinstance(source, int) and os.name == 'nt':
+                 cap.open(source, cv2.CAP_DSHOW)
+             else:
+                 cap.open(source)
              cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
              cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
         success, frame = cap.read()
+        
+        # --- CPU SAVER: Hard frame rate limiter ---
+        time.sleep(FRAME_DELAY)
+        
         if not success:
             # If stream ends (e.g. video file), loop it, or wait for reconnection
             if isinstance(source, str):
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 continue
             break
+            
+        frame_count += 1
         
-        # --- DUAL MODEL DETECTION ---
-        # 1. Fire Detection
-        fire_results = fire_model(frame, verbose=False, conf=0.30)
-        # 2. Person Detection (class 0 only)
-        person_results = person_model(frame, classes=[0], verbose=False, conf=0.40)
-        
-        # Convert to grayscale for optical flow
+        # Only process every Nth frame to boost FPS
+        if frame_count % PROCESS_EVERY_N_FRAMES != 0:
+            ret, buffer = cv2.imencode('.jpg', frame)
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+            continue
+            
+        # Convert to grayscale for optical flow and liveness detection later
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
+                
         fire_detected_in_frame = False
         fire_detections = []
         person_detections = []
-        
         max_fire_conf = 0.0
         max_severity = "None"
         max_chaos = 0.0
-        
-        # Overlay for transparent drawing
         overlay = frame.copy()
+        
+        # --- DUAL MODEL DETECTION ---
+        # 1. Fire Detection (0.28 conf for high precision without false alarms)
+        fire_results = fire_model(frame, verbose=False, conf=0.28)
         
         # --- PROCESS FIRE RESULTS ---
         for result in fire_results:
@@ -131,11 +154,11 @@ def generate_frames(camera_id):
                 conf = float(box.conf[0])
                 label = fire_model.names[cls]
                 
-                if label.lower() == "fire" and conf > 0.30:
+                if label.lower() == "fire" and conf > 0.28:
                     fire_detected_in_frame = True
                     max_fire_conf = max(max_fire_conf, conf)
                     
-                    # Calculate Area
+                    # Original bounding box coordinates are correct because YOLO handles internal scaling
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     box_area = (x2 - x1) * (y2 - y1)
                     frame_area = frame.shape[0] * frame.shape[1]
@@ -192,27 +215,33 @@ def generate_frames(camera_id):
                                 
                     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                     
-        # --- PROCESS PERSON RESULTS ---
-        for result in person_results:
-            for box in result.boxes:
-                # Class 0 is Person in COCO
-                conf = float(box.conf[0])
-                person_detections.append({"conf": conf})
-                
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                p_color = (255, 255, 0) # Cyan/Yellow for people
-                
-                # Draw Person Box
-                cv2.rectangle(overlay, (x1, y1), (x2, y2), p_color, -1)
-                
-                p_label = f"PERSON {conf:.2f}"
-                t_size = cv2.getTextSize(p_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)[0]
-                cv2.rectangle(frame, (x1, y1 - t_size[1] - 8), (x1 + t_size[0] + 8, y1), p_color, -1)
-                cv2.putText(frame, p_label, (x1 + 4, y1 - 4), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
-                            
-                cv2.rectangle(frame, (x1, y1), (x2, y2), p_color, 2)
-
+        # --- CONDITIONAL PERSON DETECTION (CPU SAVER) ---
+        # Only run the heavy person detection model IF a fire is actually detected 
+        # (or once every 30 frames just to keep the frontend person count vaguely updated)
+        if fire_detected_in_frame or (frame_count % 30 == 0):
+            person_results = person_model(frame, classes=[0], verbose=False, conf=0.40)
+            # --- PROCESS PERSON RESULTS ---
+            for result in person_results:
+                for box in result.boxes:
+                    # Class 0 is Person in COCO
+                    conf = float(box.conf[0])
+                    person_detections.append({"conf": conf})
+                    
+                    # Original boxes map correctly to original frame
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    p_color = (255, 255, 0) # Cyan/Yellow for people
+                    
+                    # Draw Person Box
+                    cv2.rectangle(overlay, (x1, y1), (x2, y2), p_color, -1)
+                    
+                    p_label = f"PERSON {conf:.2f}"
+                    t_size = cv2.getTextSize(p_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)[0]
+                    cv2.rectangle(frame, (x1, y1 - t_size[1] - 8), (x1 + t_size[0] + 8, y1), p_color, -1)
+                    cv2.putText(frame, p_label, (x1 + 4, y1 - 4), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
+                                
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), p_color, 2)
+        
         # Apply transparency to overlaid boxes
         if len(fire_detections) > 0 or len(person_detections) > 0:
             alpha = 0.35
@@ -342,6 +371,123 @@ def toggle_camera():
 def get_cameras():
     # Helper endpoint to get available cameras
     return jsonify(AVAILABLE_CAMERAS)
+
+@app.route('/api/debug/db')
+def debug_db():
+    from database import get_db_connection
+    try:
+        conn = get_db_connection()
+        if conn and conn.is_connected():
+            return jsonify({"status": "connected", "db_name": conn.database, "user": conn.user})
+        return jsonify({"status": "failed", "reason": "Connection returned None"}), 500
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/analytics/stats', methods=['GET'])
+def get_analytics_data():
+    try:
+        stats = get_analytics_stats()
+        events = get_all_fire_events()
+        return jsonify({"stats": stats, "events": events})
+    except Exception as e:
+        print(f"Error in analytics stats: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/evidence/<path:filename>')
+def serve_evidence(filename):
+    return send_from_directory('evidence', filename)
+
+@app.route('/api/event/<int:event_id>', methods=['GET'])
+def get_event_details(event_id):
+    try:
+        event = get_fire_event_by_id(event_id)
+        if event:
+            return jsonify(event)
+        return jsonify({"error": "Event not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+        
+class PDF(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 12)
+        # self.cell(0, 10, 'Fire Sense - Analytics Report', 0, 1, 'C')
+        # self.ln(10)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+
+@app.route('/api/analytics/export', methods=['GET'])
+def export_analytics_pdf():
+    try:
+        events = get_all_fire_events()
+        stats = get_analytics_stats()
+        
+        pdf = PDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        
+        pdf.set_font("Arial", 'B', 16)
+        pdf.cell(200, 10, txt="FlareSense Analytics Report", ln=True, align='C')
+        pdf.ln(10)
+
+        # Summary Section
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(200, 10, txt="Executive Summary", ln=True)
+        pdf.set_font("Arial", size=12)
+        pdf.cell(200, 10, txt=f"Total Fire Events Detected: {stats['total_events']}", ln=True)
+        pdf.cell(200, 10, txt=f"High Severity Incidents: {stats['severity_counts'].get('HIGH', 0)}", ln=True)
+        pdf.cell(200, 10, txt=f"Medium Severity Incidents: {stats['severity_counts'].get('MEDIUM', 0)}", ln=True)
+        pdf.cell(200, 10, txt=f"Average Confidence Score: {stats.get('avg_confidence', 0):.2f}", ln=True)
+        pdf.ln(10)
+        
+        # Detailed Log Table
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(200, 10, txt="Recent Fire Events Log", ln=True)
+        pdf.set_font("Arial", 'B', 10)
+        
+        # Table Header
+        pdf.cell(40, 10, "Timestamp", 1)
+        pdf.cell(20, 10, "Severity", 1)
+        pdf.cell(20, 10, "Conf", 1)
+        pdf.cell(60, 10, "Location", 1)
+        pdf.ln()
+        
+        # Table Rows
+        pdf.set_font("Arial", size=10)
+        for event in events[:50]: # Limit to last 50 for PDF
+            timestamp = str(event['timestamp']) if event['timestamp'] else "N/A"
+            # Truncate timestamp if too long
+            if len(timestamp) > 19: timestamp = timestamp[:19]
+            
+            severity = str(event['severity'])
+            conf = f"{float(event['confidence']):.2f}"
+            
+            lat = event.get('latitude')
+            lon = event.get('longitude')
+            loc = "N/A"
+            if lat is not None and lon is not None:
+                loc = f"{float(lat):.4f}, {float(lon):.4f}"
+            
+            pdf.cell(40, 10, timestamp, 1)
+            pdf.cell(20, 10, severity, 1)
+            pdf.cell(20, 10, conf, 1)
+            pdf.cell(60, 10, loc, 1)
+            pdf.ln()
+            
+        # Save PDF to a temporary file
+        filename = "fire_analytics_report.pdf"
+        pdf.output(filename)
+        
+        # Read the file and return as response
+        with open(filename, "rb") as f:
+            data = f.read()
+            
+        return Response(data, mimetype="application/pdf", headers={"Content-Disposition": "attachment;filename=fire_analytics_report.pdf"})
+    except Exception as e:
+        print(f"PDF Export Error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     # Initialize Database
