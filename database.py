@@ -145,6 +145,42 @@ def get_fire_event_by_id(event_id):
                 connection.close()
     return None
 
+def get_all_fire_events():
+    """Retrieves all fire events from the database."""
+    connection = get_db_connection()
+    if connection:
+        try:
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute("SELECT * FROM fire_events ORDER BY timestamp DESC")
+            events = cursor.fetchall()
+            return events
+        except Error as e:
+            print(f"❌ Failed to fetch events: {e}")
+            return []
+        finally:
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
+    return []
+
+def get_fire_event_by_id(event_id):
+    """Retrieves a single fire event by ID."""
+    connection = get_db_connection()
+    if connection:
+        try:
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute("SELECT * FROM fire_events WHERE id = %s", (event_id,))
+            event = cursor.fetchone()
+            return event
+        except Error as e:
+            print(f"❌ Failed to fetch event {event_id}: {e}")
+            return None
+        finally:
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
+    return None
+
 def get_analytics_stats():
     """Retrieves aggregated statistics for the analytics dashboard."""
     connection = get_db_connection()

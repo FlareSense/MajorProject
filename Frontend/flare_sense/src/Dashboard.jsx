@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Flame, AlertTriangle, Activity, Camera, ShieldCheck, Thermometer, Users, Box, Map as MapIcon, Download } from 'lucide-react';
 import SpatialMap from './SpatialMap';
@@ -7,12 +8,14 @@ import FireDetailsModal from './components/FireDetailsModal';
 const Dashboard = () => {
     // Navigation State
     const [activeView, setActiveView] = useState('dashboard');
+    const [selectedEventId, setSelectedEventId] = useState(null);
 
     // System Data State
     const [cameras, setCameras] = useState({});
     const [systemStatus, setSystemStatus] = useState({});
 
     const [alerts, setAlerts] = useState([]);
+    const [analyticsData, setAnalyticsData] = useState(null);
 
     // Analytics State
     const [analyticsData, setAnalyticsData] = useState(null);
@@ -44,6 +47,14 @@ const Dashboard = () => {
             .then(data => setCameras(data))
             .catch(err => console.error("Error fetching cameras:", err));
     }, []);
+
+    // Fetch Analytics Data
+    const fetchAnalytics = () => {
+        fetch('http://localhost:5000/api/analytics/stats')
+            .then(res => res.json())
+            .then(data => setAnalyticsData(data))
+            .catch(err => console.error("Analytics Error:", err));
+    };
 
     // Fetch Analytics Data
     const fetchAnalytics = () => {
@@ -294,12 +305,15 @@ const Dashboard = () => {
                     {activeView === 'history' && (
                         <div className="glass-panel" style={{ gridColumn: '1 / -1' }}>
                             <h2><Thermometer size={20} /> Extensive Incident History</h2>
-                            <p>Full database logs would appear here.</p>
+                            <p>Recent incidents logged by the system.</p>
                             <div className="alerts-list" style={{ marginTop: '20px' }}>
                                 {alerts.map((alert, index) => (
-                                    <div key={index} className={`alert-item ${alert.type}`}>
-                                        <span className="timestamp">{alert.time}</span>
-                                        <span className="message">{alert.message} - {alert.type.toUpperCase()}</span>
+                                    <div key={index} className={`alert-item ${alert.type}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div>
+                                            <span className="timestamp">{alert.time}</span>
+                                            <span className="message">{alert.message} - {alert.type.toUpperCase()}</span>
+                                        </div>
+                                        {/* Note: In real history from DB, we would have IDs. For local alerts, we don't have DB IDs yet unless we fetch. */}
                                     </div>
                                 ))}
                             </div>
