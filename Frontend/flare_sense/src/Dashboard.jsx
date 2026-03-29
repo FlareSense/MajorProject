@@ -157,13 +157,13 @@ const Dashboard = ({ token, roles, onLogout }) => {
         <div className="dashboard-container">
             {/* Sidebar / Navigation */}
             <nav className="glass-nav">
-                <div className="logo" style={{ marginBottom: '10px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                <div className="logo" style={{ marginBottom: '10px', display: 'flex', flexDirection: 'column', gap: '15px', alignItems: 'center' }}>
                     <img 
-                        src="/logo.svg" 
+                        src="/logo.png" 
                         alt="FlareSense Logo" 
-                        style={{ width: '64px', height: '64px', borderRadius: '15px', boxShadow: '0 0 20px rgba(0, 210, 255, 0.2)' }}
+                        style={{ width: '110px', height: '110px', borderRadius: '15px', boxShadow: '0 0 20px rgba(0, 210, 255, 0.2)', objectFit: 'contain' }}
                     />
-                    <h1 style={{ fontSize: '1.6rem', letterSpacing: '-1px', color: 'var(--text-primary)' }}>FlareSense</h1>
+                    <h1 style={{ fontSize: '1.6rem', letterSpacing: '-1px', margin: 0, color: 'var(--text-primary)' }}>FLARESENSE</h1>
                 </div>
 
                 <ThemeToggle />

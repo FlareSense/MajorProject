@@ -46,13 +46,17 @@ body.light-mode {
                  radial-gradient(circle at 100% 100%, rgba(204, 0, 51, 0.05), transparent 50%);
 }
 
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 110px; /* Accounts for the larger navbar */
+}
+
 body {
   margin: 0;
   font-family: var(--font-body) !important;
   background-color: var(--bg-color);
   color: var(--text-primary);
   min-height: 100vh;
-  overflow: hidden;
   transition: background-color var(--transition-speed), color var(--transition-speed);
   /* Use the specified gradient per theme */
   background-image: var(--bg-gradient);

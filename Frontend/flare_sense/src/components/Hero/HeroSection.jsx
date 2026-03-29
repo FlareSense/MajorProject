@@ -46,31 +46,31 @@ const HeroSection = ({ onShowLogin }) => {
             {/* Badges */}
             <motion.div className="flex flex-wrap justify-center gap-4" variants={itemVariants}>
                 {[
-                  { label: "High Security", icon: Shield },
-                  { label: "Fast Deployment", icon: Zap },
-                  { label: "Cloud Integrated", icon: Database }
+                  { label: "Sub-second AI Vision", icon: Zap },
+                  { label: "Early Warning System", icon: Shield },
+                  { label: "Multi-Channel Alerts", icon: Database }
                 ].map((badge, i) => (
                     <div key={i} className="flex items-center gap-3 px-5 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md shadow-xl">
                         <badge.icon size={16} className="text-blue-400" />
-                        <span className="text-sm font-medium text-white/80">Integrated with {badge.label}</span>
+                        <span className="text-sm font-medium text-white/80">{badge.label}</span>
                     </div>
                 ))}
             </motion.div>
 
             {/* Headline */}
             <motion.h1 
-                className="text-6xl md:text-8xl font-bold tracking-tight text-white leading-[0.9] max-w-5xl"
+                className="text-5xl md:text-7xl lg:text-7xl font-bold tracking-tight text-white leading-[1.1] max-w-5xl text-center"
                 variants={itemVariants}
             >
-                Where Innovation <br /> Meets Execution
+                Real Time Fire Detection <br className="hidden md:block" /> <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500">With Instant Emails And Audio Alerts</span>
             </motion.h1>
 
             {/* Subtext */}
             <motion.p 
-                className="text-lg md:text-xl text-white/60 max-w-2xl font-light"
+                className="text-lg md:text-xl text-white/80 max-w-3xl font-light"
                 variants={itemVariants}
             >
-                Harness the power of AI-driven security and intelligent analytics to protect your assets and streamline resident management seamlessly.
+                Harness the power of AI-driven CCTV security to detect fire anomalies instantly. Protect properties and lives with immediate SMS, Telegram, and Audio alerts.
             </motion.p>
 
             {/* Buttons */}

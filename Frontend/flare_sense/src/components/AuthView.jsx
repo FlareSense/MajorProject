@@ -67,8 +67,8 @@ const AuthView = ({ onLogin }) => {
                 gap: '2.5rem'
             }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
-                    <div className="avatar" style={{ width: '80px', height: '80px', borderRadius: '20px', fontSize: '2rem' }}>
-                        <Flame size={40} />
+                    <div className="avatar" style={{ width: '130px', height: '130px', borderRadius: '20px', padding: '0', overflow: 'hidden' }}>
+                        <img src="/logo.png" alt="FlareSense Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                     </div>
                     <h1 style={{ 
                         margin: 0, 

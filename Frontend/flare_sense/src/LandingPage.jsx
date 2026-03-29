@@ -2,6 +2,10 @@ import React from 'react';
 import Navbar from './components/Hero/Navbar';
 import HeroSection from './components/Hero/HeroSection';
 import LogoRow from './components/Hero/LogoMarquee';
+import Features from './components/Landing/Features';
+import Insights from './components/Landing/Insights';
+import About from './components/Landing/About';
+import Contact from './components/Landing/Contact';
 
 const LandingPage = ({ onShowLogin }) => {
   return (
@@ -10,6 +14,10 @@ const LandingPage = ({ onShowLogin }) => {
         <main>
             <HeroSection onShowLogin={onShowLogin} />
             <LogoRow />
+            <Features />
+            <Insights />
+            <About />
+            <Contact />
         </main>
         
         {/* Abstract Decorative Elements */}
