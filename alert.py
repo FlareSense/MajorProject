@@ -48,7 +48,7 @@ def make_call_alert(severity, location_url):
     except Exception as e:
         print(f"❌ Failed to make call: {e}")
 
-def send_email_alert(image_path, location=None):
+def send_email_alert(image_path, location=None, cam_name="Unknown"):
     try:
         EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
         EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
@@ -62,7 +62,7 @@ def send_email_alert(image_path, location=None):
         msg['From'] = EMAIL_ADDRESS
         msg['To'] = TO_EMAIL
         
-        content = "Fire detected. See attached image.\n"
+        content = f"Alert detected in zone: {cam_name}. See attached image.\n"
         
         if location and 'lat' in location and 'lon' in location:
             lat = location['lat']
@@ -96,7 +96,7 @@ def send_email_alert(image_path, location=None):
 
 # --- TELEGRAM AND WHATSAPP BOTS ---
 
-def send_telegram_alert(image_path, location=None, message="FIRE ALERT", severity="High"):
+def send_telegram_alert(image_path, location=None, message="FIRE ALERT", severity="High", cam_name="Unknown"):
     import requests
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -108,7 +108,7 @@ def send_telegram_alert(image_path, location=None, message="FIRE ALERT", severit
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
     
     emoji = "🚨" if severity.lower() in ["high", "critical"] else "⚠️"
-    caption = f"{emoji} *{message}* {emoji}\n\n*Severity:* {severity}"
+    caption = f"{emoji} *{message}* {emoji}\n\n*Severity:* {severity}\n📍 *Zone:* {cam_name}"
     
     if location and 'lat' in location and 'lon' in location:
         maps_link = f"https://www.google.com/maps?q={location['lat']},{location['lon']}"
@@ -130,7 +130,27 @@ def send_telegram_alert(image_path, location=None, message="FIRE ALERT", severit
     except Exception as e:
         print(f"❌ Telegram Exception: {e}")
 
-def send_whatsapp_alert(location=None, message="FIRE ALERT", severity="High"):
+def upload_image_to_public_url(image_path):
+    import requests
+    try:
+        with open(image_path, 'rb') as f:
+            resp = requests.post("https://catbox.moe/user/api.php", data={"reqtype": "fileupload"}, files={"fileToUpload": f}, timeout=10)
+        if resp.status_code == 200 and resp.text.startswith("http"):
+            return resp.text.strip()
+    except Exception as e:
+        print(f"Catbox upload failed: {e}")
+        
+    try:
+        with open(image_path, 'rb') as f:
+            resp = requests.post("https://file.io", files={"file": f}, timeout=10)
+        if resp.status_code == 200:
+            return resp.json().get("link")
+    except Exception as e:
+        print(f"File.io upload failed: {e}")
+        
+    return None
+
+def send_whatsapp_alert(image_path, location=None, message="FIRE ALERT", severity="High", cam_name="Unknown"):
     TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
     
     if "ACxxx" in TWILIO_SID or not TWILIO_WHATSAPP_NUMBER:
@@ -140,22 +160,38 @@ def send_whatsapp_alert(location=None, message="FIRE ALERT", severity="High"):
     client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
     
     emoji = "🚨" if severity.lower() in ["high", "critical"] else "⚠️"
-    body = f"{emoji} *{message}* {emoji}\n\n*Severity:* {severity}"
+    body = f"{emoji} *{message}* {emoji}\n\n*Severity:* {severity}\n📍 *Zone:* {cam_name}"
     
+    public_image_url = None
+    if image_path:
+        print("⏳ Uploading image to public server for WhatsApp...")
+        public_image_url = upload_image_to_public_url(image_path)
+        if public_image_url:
+            body += f"\n🖼️ Evidence Link: {public_image_url}"
+        else:
+            filename = os.path.basename(image_path)
+            body += f"\n🖼️ Local Evidence: http://127.0.0.1:5000/evidence/{filename}"
+            
     if location and 'lat' in location and 'lon' in location:
         maps_link = f"https://www.google.com/maps?q={location['lat']},{location['lon']}"
-        body += f"\n📍 Map: {maps_link}"
+        body += f"\n📍 Google Maps: {maps_link}"
+    else:
+        body += f"\n📍 Location: Unknown GPS"
     
     try:
         # Twilio WhatsApp requires 'whatsapp:' prefix
         from_number = f"whatsapp:{TWILIO_WHATSAPP_NUMBER}"
         to_number = f"whatsapp:{USER_PHONE_NUMBER}"
         
-        msg = client.messages.create(
-            body=body,
-            from_=from_number,
-            to=to_number
-        )
+        msg_args = {
+            "body": body,
+            "from_": from_number,
+            "to": to_number
+        }
+        if public_image_url:
+            msg_args["media_url"] = [public_image_url]
+
+        msg = client.messages.create(**msg_args)
         print(f"✅ WhatsApp Alert Sent! SID: {msg.sid}")
     except Exception as e:
         print(f"❌ Failed to send WhatsApp: {e}")
