@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Download, MapPin, AlertTriangle, Activity, Calendar } from 'lucide-react';
 
@@ -50,7 +50,7 @@ const FireDetailsModal = ({ eventId, onClose }) => {
                     ) : event ? (
                         <div className="modal-content">
                             <h2 style={{ marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px' }}>
-                                🔥 Fire Incident Report #{event.id}
+                                ≡ƒöÑ Fire Incident Report #{event.id}
                             </h2>
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>

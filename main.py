@@ -8,7 +8,7 @@ from utils import save_fire_image, calculate_chaos, MIN_MOTION_PIXELS, CHAOS_THR
 ALARM_COOLDOWN = 60
 last_alarm_time = 0
 
-ALARM_COOLDOWN = 60
+ALARM_COOLDOWN = 6
 last_alarm_time = 0
 
 prev_gray = None

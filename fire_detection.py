@@ -6,7 +6,7 @@ from datetime import datetime
 from ultralytics import YOLO
 
 # Load Fire Detection Model
-model = YOLO("best_v2.pt")
+model = YOLO("best_final.onnx")
 
 # Create evidence folder if not exists
 if not os.path.exists("evidence"):

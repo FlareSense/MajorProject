@@ -3,12 +3,16 @@ import smtplib
 import os
 from email.message import EmailMessage
 from twilio.rest import Client  # Import Twilio (Install: pip install twilio)
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # --- TWILIO SMS CONFIGURATION ---
-TWILIO_SID = os.getenv("TWILIO_SID", "")
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
-TWILIO_FROM_NUMBER = os.getenv("TWILIO_FROM_NUMBER", "")
-USER_PHONE_NUMBER = os.getenv("USER_PHONE_NUMBER", "")
+TWILIO_SID = os.getenv("TWILIO_SID") 
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_FROM_NUMBER = os.getenv("TWILIO_FROM_NUMBER")
+USER_PHONE_NUMBER = os.getenv("USER_PHONE_NUMBER")
 # ------------------------------------------------
 
 def play_alarm():
@@ -44,18 +48,21 @@ def make_call_alert(severity, location_url):
     except Exception as e:
         print(f"❌ Failed to make call: {e}")
 
-def send_email_alert(image_path, location=None):
+def send_email_alert(image_path, location=None, cam_name="Unknown"):
     try:
-        EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS", "")
-        EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
-        TO_EMAIL = os.getenv("TO_EMAIL", "")
- 
+        EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
+        EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+        TO_EMAIL = os.getenv("TO_EMAIL")
+
+        if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
+            print("❌ Email credentials missing in .env file (EMAIL_ADDRESS or EMAIL_PASSWORD)")
+            return
         msg = EmailMessage()
         msg['Subject'] = "🔥 FIRE ALERT DETECTED!"
         msg['From'] = EMAIL_ADDRESS
         msg['To'] = TO_EMAIL
         
-        content = "Fire detected. See attached image.\n"
+        content = f"Alert detected in zone: {cam_name}. See attached image.\n"
         
         if location and 'lat' in location and 'lon' in location:
             lat = location['lat']
@@ -78,5 +85,114 @@ def send_email_alert(image_path, location=None):
 
         print("[EMAIL SENT] Fire alert email delivered.")
 
+    except smtplib.SMTPAuthenticationError:
+        print("\n❌ EMAIL LOGIN FAILED: Username and Password not accepted.")
+        print("👉 Solution: You must use an 'App Password' if 2-Step Verification is enabled.")
+        print("   1. Go to https://myaccount.google.com/security")
+        print("   2. Search for 'App Passwords'")
+        print("   3. Generate a new password and update EMAIL_PASSWORD in .env\n")
     except Exception as e:
-        print("[EMAIL ERROR]", e)
+        print(f"[EMAIL ERROR] {e}")
+
+# --- TELEGRAM AND WHATSAPP BOTS ---
+
+def send_telegram_alert(image_path, location=None, message="FIRE ALERT", severity="High", cam_name="Unknown"):
+    import requests
+    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+    TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+    
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("⚠️ Telegram Credentials not set. Alert Skipped.")
+        return
+        
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+    
+    emoji = "🚨" if severity.lower() in ["high", "critical"] else "⚠️"
+    caption = f"{emoji} *{message}* {emoji}\n\n*Severity:* {severity}\n📍 *Zone:* {cam_name}"
+    
+    if location and 'lat' in location and 'lon' in location:
+        maps_link = f"https://www.google.com/maps?q={location['lat']},{location['lon']}"
+        caption += f"\n📍 [View Location on Map]({maps_link})"
+        
+    try:
+        with open(image_path, 'rb') as f:
+            files = {'photo': f}
+            data = {
+                'chat_id': TELEGRAM_CHAT_ID,
+                'caption': caption,
+                'parse_mode': 'Markdown'
+            }
+            response = requests.post(url, files=files, data=data)
+            if response.status_code == 200:
+                print("✅ Telegram Alert Sent Successfully!")
+            else:
+                print(f"❌ Telegram Error: {response.text}")
+    except Exception as e:
+        print(f"❌ Telegram Exception: {e}")
+
+def upload_image_to_public_url(image_path):
+    import requests
+    try:
+        with open(image_path, 'rb') as f:
+            resp = requests.post("https://catbox.moe/user/api.php", data={"reqtype": "fileupload"}, files={"fileToUpload": f}, timeout=10)
+        if resp.status_code == 200 and resp.text.startswith("http"):
+            return resp.text.strip()
+    except Exception as e:
+        print(f"Catbox upload failed: {e}")
+        
+    try:
+        with open(image_path, 'rb') as f:
+            resp = requests.post("https://file.io", files={"file": f}, timeout=10)
+        if resp.status_code == 200:
+            return resp.json().get("link")
+    except Exception as e:
+        print(f"File.io upload failed: {e}")
+        
+    return None
+
+def send_whatsapp_alert(image_path, location=None, message="FIRE ALERT", severity="High", cam_name="Unknown"):
+    TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
+    
+    if "ACxxx" in TWILIO_SID or not TWILIO_WHATSAPP_NUMBER:
+        print("⚠️ Twilio WhatsApp Credentials not set. Alert Skipped.")
+        return
+        
+    client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
+    
+    emoji = "🚨" if severity.lower() in ["high", "critical"] else "⚠️"
+    body = f"{emoji} *{message}* {emoji}\n\n*Severity:* {severity}\n📍 *Zone:* {cam_name}"
+    
+    public_image_url = None
+    if image_path:
+        print("⏳ Uploading image to public server for WhatsApp...")
+        public_image_url = upload_image_to_public_url(image_path)
+        if public_image_url:
+            body += f"\n🖼️ Evidence Link: {public_image_url}"
+        else:
+            filename = os.path.basename(image_path)
+            body += f"\n🖼️ Local Evidence: http://127.0.0.1:5000/evidence/{filename}"
+            
+    if location and 'lat' in location and 'lon' in location:
+        maps_link = f"https://www.google.com/maps?q={location['lat']},{location['lon']}"
+        body += f"\n📍 Google Maps: {maps_link}"
+    else:
+        body += f"\n📍 Location: Unknown GPS"
+    
+    try:
+        # Twilio WhatsApp requires 'whatsapp:' prefix
+        from_number = f"whatsapp:{TWILIO_WHATSAPP_NUMBER}"
+        to_number = f"whatsapp:{USER_PHONE_NUMBER}"
+        
+        msg_args = {
+            "body": body,
+            "from_": from_number,
+            "to": to_number
+        }
+        if public_image_url:
+            msg_args["media_url"] = [public_image_url]
+
+        msg = client.messages.create(**msg_args)
+        print(f"✅ WhatsApp Alert Sent! SID: {msg.sid}")
+    except Exception as e:
+        print(f"❌ Failed to send WhatsApp: {e}")
+

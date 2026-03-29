@@ -1,3 +1,8 @@
 opencv-python
 ultralytics
 numpy
+python-dotenv
+flask
+flask-cors
+twilio
+mysql-connector-python
