@@ -1,7 +1,9 @@
-import React, { useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useRef } from 'react';
 import Hls from 'hls.js';
+import { useTheme } from '../../context/ThemeContext';
 
 const VideoPlayer = ({ src, className }) => {
+  const { theme } = useTheme();
   const videoRef = useRef(null);
 
   useEffect(() => {
@@ -37,10 +39,15 @@ const VideoPlayer = ({ src, className }) => {
   }, [src]);
 
   return (
-    <div className={`relative w-full h-[80vh] overflow-hidden ${className}`}>
+    <div className={`relative w-full h-[80vh] overflow-hidden ${className}`} style={{ backgroundColor: 'var(--bg-color)' }}>
         <video
             ref={videoRef}
-            className="absolute top-0 left-0 w-full h-full object-cover"
+            className="absolute top-0 left-0 w-full h-full object-cover transition-all duration-700"
+            style={{ 
+              filter: theme === 'light' ? 'invert(1) hue-rotate(180deg) brightness(1.1)' : 'none',
+              mixBlendMode: theme === 'light' ? 'multiply' : 'normal',
+              opacity: theme === 'light' ? 0.9 : 1
+            }}
             muted
             loop
             autoPlay

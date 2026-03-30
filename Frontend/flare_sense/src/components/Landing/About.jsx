@@ -3,13 +3,13 @@ import { ShieldCheck } from 'lucide-react';
 
 const About = () => {
     return (
-        <section id="about" className="py-24 bg-black relative z-10 px-6">
+        <section id="about" className="py-24 bg-[var(--bg-color)] relative z-10 px-6 transition-colors duration-500">
             <div className="max-w-4xl mx-auto text-center">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 text-blue-400 mb-8 border border-white/10">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 text-blue-400 mb-8 border border-[var(--glass-border)] transition-colors">
                     <ShieldCheck size={32} />
                 </div>
-                <h2 className="text-4xl md:text-5xl font-bold text-white mb-8">About Flare Sense</h2>
-                <div className="space-y-6 text-lg text-white/70 leading-relaxed font-light">
+                <h2 className="text-4xl md:text-5xl font-bold text-[var(--text-primary)] mb-8">About Flare Sense</h2>
+                <div className="space-y-6 text-lg text-[var(--text-secondary)] leading-relaxed font-light">
                     <p>
                         Flare Sense is an advanced Early Warning System (EWS) engineered to replace slow, outdated fire safety infrastructures.
                         By leveraging Deep Learning and custom YOLO architecture, we've created a platform that turns continuous camera feeds into
