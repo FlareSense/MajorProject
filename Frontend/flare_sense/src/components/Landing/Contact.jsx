@@ -52,45 +52,45 @@ const Contact = () => {
     };
 
     return (
-        <section id="contact" className="py-24 bg-black/95 border-t border-white/5 relative z-10 px-6">
+        <section id="contact" className="py-24 bg-[var(--bg-color)]/95 border-t border-[var(--glass-border)] relative z-10 px-6 transition-colors duration-500">
             <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16">
                 <div>
-                    <h2 className="text-4xl font-bold text-white mb-6">Let's Get Connected</h2>
-                    <p className="text-white/60 text-lg mb-10 leading-relaxed font-light">
+                    <h2 className="text-4xl font-bold text-[var(--text-primary)] mb-6">Let's Get Connected</h2>
+                    <p className="text-[var(--text-secondary)] text-lg mb-10 leading-relaxed font-light">
                         Ready to integrate cutting-edge fire AI scanning into your existing CCTV network? Reach out to our team to request a demo or explore deployment options.
                     </p>
                     <div className="space-y-8">
                         <div className="flex items-center gap-4">
-                            <div className="p-4 bg-white/5 rounded-full text-white/80 border border-white/10">
+                            <div className="p-4 bg-[var(--glass-bg)] rounded-full text-[var(--text-primary)]/80 border border-[var(--glass-border)] transition-colors">
                                 <Mail size={24} />
                             </div>
                             <div>
-                                <h4 className="text-white font-medium">Email Us</h4>
-                                <span className="text-white/50 text-sm">codewithpavan29@gmail.com</span>
+                                <h4 className="text-[var(--text-primary)] font-medium">Email Us</h4>
+                                <span className="text-[var(--text-secondary)]/50 text-sm">codewithpavan29@gmail.com</span>
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
-                            <div className="p-4 bg-white/5 rounded-full text-white/80 border border-white/10">
+                            <div className="p-4 bg-[var(--glass-bg)] rounded-full text-[var(--text-primary)]/80 border border-[var(--glass-border)] transition-colors">
                                 <Phone size={24} />
                             </div>
                             <div>
-                                <h4 className="text-white font-medium">Call Us</h4>
-                                <span className="text-white/50 text-sm">8790102300</span>
+                                <h4 className="text-[var(--text-primary)] font-medium">Call Us</h4>
+                                <span className="text-[var(--text-secondary)]/50 text-sm">8790102300</span>
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
-                            <div className="p-4 bg-white/5 rounded-full text-white/80 border border-white/10">
+                            <div className="p-4 bg-[var(--glass-bg)] rounded-full text-[var(--text-primary)]/80 border border-[var(--glass-border)] transition-colors">
                                 <MapPin size={24} />
                             </div>
                             <div>
-                                <h4 className="text-white font-medium">Office</h4>
-                                <span className="text-white/50 text-sm">Langer Houz Hyderabad</span>
+                                <h4 className="text-[var(--text-primary)] font-medium">Office</h4>
+                                <span className="text-[var(--text-secondary)]/50 text-sm">Langer Houz Hyderabad</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-8 lg:p-12 backdrop-blur-md">
+                <div className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-2xl p-8 lg:p-12 backdrop-blur-md transition-colors">
                     <form className="space-y-6" onSubmit={handleSubmit}>
                         {status === 'success' && (
                             <div className="flex items-center gap-3 p-4 bg-green-500/10 border border-green-500/20 text-green-400 rounded-xl">
@@ -107,10 +107,10 @@ const Contact = () => {
                         )}
 
                         <div>
-                            <label className="text-sm font-semibold text-white/60 mb-2 block uppercase tracking-wider">Full Name</label>
+                            <label className="text-sm font-semibold text-[var(--text-secondary)]/60 mb-2 block uppercase tracking-wider">Full Name</label>
                             <input 
                                 type="text" 
-                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors" 
+                                className="w-full bg-[var(--bg-color)]/5 border border-[var(--glass-border)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-blue-500 transition-colors" 
                                 placeholder="John Doe" 
                                 value={formData.name}
                                 onChange={(e) => setFormData({...formData, name: e.target.value})}
@@ -118,10 +118,10 @@ const Contact = () => {
                             />
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-white/60 mb-2 block uppercase tracking-wider">Email Address</label>
+                            <label className="text-sm font-semibold text-[var(--text-secondary)]/60 mb-2 block uppercase tracking-wider">Email Address</label>
                             <input 
                                 type="email" 
-                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors" 
+                                className="w-full bg-[var(--bg-color)]/5 border border-[var(--glass-border)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-blue-500 transition-colors" 
                                 placeholder="johndoe@example.com" 
                                 value={formData.email}
                                 onChange={(e) => setFormData({...formData, email: e.target.value})}
@@ -129,10 +129,10 @@ const Contact = () => {
                             />
                         </div>
                         <div>
-                            <label className="text-sm font-semibold text-white/60 mb-2 block uppercase tracking-wider">Message</label>
+                            <label className="text-sm font-semibold text-[var(--text-secondary)]/60 mb-2 block uppercase tracking-wider">Message</label>
                             <textarea 
                                 rows="4" 
-                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors resize-none" 
+                                className="w-full bg-[var(--bg-color)]/5 border border-[var(--glass-border)] rounded-xl px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-blue-500 transition-colors resize-none" 
                                 placeholder="How can we help you protect your assets?"
                                 value={formData.message}
                                 onChange={(e) => setFormData({...formData, message: e.target.value})}

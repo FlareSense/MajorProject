@@ -6,10 +6,11 @@ import Features from './components/Landing/Features';
 import Insights from './components/Landing/Insights';
 import About from './components/Landing/About';
 import Contact from './components/Landing/Contact';
+import Footer from './components/Landing/Footer';
 
 const LandingPage = ({ onShowLogin }) => {
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-blue-500/30">
+    <div className="min-h-screen selection:bg-blue-500/30 transition-colors duration-500">
         <Navbar onShowLogin={onShowLogin} />
         <main>
             <HeroSection onShowLogin={onShowLogin} />
@@ -19,6 +20,7 @@ const LandingPage = ({ onShowLogin }) => {
             <About />
             <Contact />
         </main>
+        <Footer />
         
         {/* Abstract Decorative Elements */}
         <div className="fixed top-0 left-0 w-full h-full pointer-events-none z-0">

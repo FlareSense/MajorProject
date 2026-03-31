@@ -2,12 +2,10 @@ package com.flaresense.auth.controllers;
 
 import com.flaresense.auth.models.FireEvent;
 import com.flaresense.auth.repository.FireEventRepository;
+import com.flaresense.auth.services.AlertCleanupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.List;
@@ -54,10 +52,21 @@ public class AnalyticsController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * GET /api/analytics/history
+     * Returns fire events from the last 30 days, ordered newest first.
+     */
+    @GetMapping("/history")
+    public ResponseEntity<?> getRecentHistory() {
+        List<FireEvent> events = repository.findByTimestampAfterOrderByTimestampDesc(
+                AlertCleanupService.getThirtyDaysAgo()
+        );
+        return ResponseEntity.ok(events);
+    }
+
     @GetMapping("/events/{id}")
     public ResponseEntity<?> getEventDetails(@PathVariable Long id) {
         Optional<FireEvent> event = repository.findById(id);
-
         if (event.isPresent()) {
             return ResponseEntity.ok(event.get());
         } else {
