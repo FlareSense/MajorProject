@@ -13,6 +13,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
+@CrossOrigin(origins = "*")
 public class AuthController {
 
     @Autowired
@@ -29,12 +30,9 @@ public class AuthController {
         String username = loginRequest.get("username");
         String password = loginRequest.get("password");
 
-        // Basic direct check for this demo (usually use AuthenticationManager)
         return userRepository.findByUsername(username)
                 .filter(user -> encoder.matches(password, user.getPassword()))
                 .map(user -> {
-                    // Generate cheap token manually for simplicity in this demo without full
-                    // UserDetailsServiceImpl
                     String jwt = io.jsonwebtoken.Jwts.builder()
                             .setSubject(user.getUsername())
                             .setIssuedAt(new java.util.Date())
@@ -49,7 +47,9 @@ public class AuthController {
                     response.put("token", jwt);
                     response.put("id", user.getId());
                     response.put("username", user.getUsername());
+                    response.put("email", user.getEmail());
                     response.put("roles", user.getRoles());
+                    response.put("profileImage", user.getProfileImage());
                     return ResponseEntity.ok(response);
                 })
                 .orElse(ResponseEntity.status(401).body(Map.of("message", "Error: Unauthorized")));
@@ -61,10 +61,14 @@ public class AuthController {
             return ResponseEntity.badRequest().body(Map.of("message", "Error: Username is already taken!"));
         }
 
-        // Create new user's account
         User user = new User(signUpRequest.get("username"),
                 signUpRequest.get("email"),
                 encoder.encode(signUpRequest.get("password")));
+
+        // Store profile image if provided
+        if (signUpRequest.get("profileImage") != null && !signUpRequest.get("profileImage").isEmpty()) {
+            user.setProfileImage(signUpRequest.get("profileImage"));
+        }
 
         String reqRole = signUpRequest.get("role");
         String finalRole = "ROLE_USER";
@@ -80,9 +84,113 @@ public class AuthController {
         }
 
         user.getRoles().add(finalRole);
-
         userRepository.save(user);
 
         return ResponseEntity.ok(Map.of("message", "User registered successfully!"));
+    }
+
+    /**
+     * GET /api/auth/me — returns the currently logged-in user's details.
+     * Reads username from the JWT Authorization header.
+     */
+    @GetMapping("/me")
+    public ResponseEntity<?> getCurrentUser(@RequestHeader("Authorization") String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.status(401).body(Map.of("message", "Missing or invalid token"));
+        }
+        String token = authHeader.substring(7);
+        try {
+            String username = io.jsonwebtoken.Jwts.parserBuilder()
+                    .setSigningKey(io.jsonwebtoken.security.Keys.hmacShaKeyFor(
+                            "FlareSenseSuperSecretKey123!@#FlareSenseSuperSecretKey123!@#".getBytes()))
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody()
+                    .getSubject();
+
+            return userRepository.findByUsername(username)
+                    .map(user -> {
+                        Map<String, Object> response = new HashMap<>();
+                        response.put("id", user.getId());
+                        response.put("username", user.getUsername());
+                        response.put("email", user.getEmail());
+                        response.put("roles", user.getRoles());
+                        response.put("profileImage", user.getProfileImage());
+                        return ResponseEntity.ok(response);
+                    })
+                    .orElse(ResponseEntity.status(404).body(Map.of("message", "User not found")));
+        } catch (Exception e) {
+            return ResponseEntity.status(401).body(Map.of("message", "Invalid token"));
+        }
+    }
+
+    /**
+     * PUT /api/auth/profile — update username, password, and/or profile image.
+     */
+    @PutMapping("/profile")
+    public ResponseEntity<?> updateProfile(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestBody Map<String, String> body) {
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.status(401).body(Map.of("message", "Missing or invalid token"));
+        }
+
+        // ── Step 1: parse JWT (only JWT errors go to 401) ──────────────────
+        String username;
+        try {
+            username = io.jsonwebtoken.Jwts.parserBuilder()
+                    .setSigningKey(io.jsonwebtoken.security.Keys.hmacShaKeyFor(
+                            "FlareSenseSuperSecretKey123!@#FlareSenseSuperSecretKey123!@#".getBytes()))
+                    .build()
+                    .parseClaimsJws(authHeader.substring(7))
+                    .getBody()
+                    .getSubject();
+        } catch (Exception e) {
+            return ResponseEntity.status(401).body(Map.of("message", "Invalid or expired token"));
+        }
+
+        // ── Step 2: load user + apply changes (DB errors → 400/500) ────────
+        try {
+            var userOpt = userRepository.findByUsername(username);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(404).body(Map.of("message", "User not found"));
+            }
+            var user = userOpt.get();
+
+            // Update username if provided and different
+            String newUsername = body.get("username");
+            if (newUsername != null && !newUsername.isBlank() && !newUsername.trim().equals(user.getUsername())) {
+                if (userRepository.existsByUsername(newUsername.trim())) {
+                    return ResponseEntity.badRequest().body(Map.of("message", "Username already taken"));
+                }
+                user.setUsername(newUsername.trim());
+            }
+
+            // Update password if provided
+            String newPassword = body.get("password");
+            if (newPassword != null && !newPassword.isBlank()) {
+                user.setPassword(encoder.encode(newPassword));
+            }
+
+            // Update profile image if provided
+            String newImage = body.get("profileImage");
+            if (newImage != null && !newImage.isBlank()) {
+                user.setProfileImage(newImage);
+            }
+
+            userRepository.save(user);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Profile updated successfully");
+            response.put("username", user.getUsername());
+            response.put("email", user.getEmail());
+            response.put("profileImage", user.getProfileImage());
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            System.err.println("Profile update error: " + e.getMessage());
+            return ResponseEntity.status(500).body(Map.of("message", "Failed to update profile: " + e.getMessage()));
+        }
     }
 }

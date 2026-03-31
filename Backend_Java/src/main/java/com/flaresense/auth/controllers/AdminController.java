@@ -55,6 +55,10 @@ public class AdminController {
                 request.getOrDefault("email", "operator@flaresense.local"),
                 encoder.encode(request.get("password")));
 
+        if (request.get("profileImage") != null && !request.get("profileImage").isEmpty()) {
+            user.setProfileImage(request.get("profileImage"));
+        }
+
         user.getRoles().add(role);
         userRepository.save(user);
 

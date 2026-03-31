@@ -8,27 +8,39 @@ import './index.css';
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [roles, setRoles] = useState(JSON.parse(localStorage.getItem('roles')) || []);
+  const [userInfo, setUserInfo] = useState(JSON.parse(localStorage.getItem('userInfo')) || null);
   const [showLogin, setShowLogin] = useState(false);
 
-  const handleLogin = (newToken, newRoles) => {
+  // Now receives full user data object from AuthView
+  const handleLogin = (newToken, newRoles, newUserInfo) => {
     localStorage.setItem('token', newToken);
     localStorage.setItem('roles', JSON.stringify(newRoles));
+    localStorage.setItem('userInfo', JSON.stringify(newUserInfo));
     setToken(newToken);
     setRoles(newRoles);
+    setUserInfo(newUserInfo);
     setShowLogin(false);
   };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('roles');
+    localStorage.removeItem('userInfo');
     setToken(null);
     setRoles([]);
+    setUserInfo(null);
+  };
+
+  const handleUserInfoUpdate = (updatedInfo) => {
+    const merged = { ...userInfo, ...updatedInfo };
+    localStorage.setItem('userInfo', JSON.stringify(merged));
+    setUserInfo(merged);
   };
 
   if (token) {
     return (
       <ThemeProvider>
-        <Dashboard token={token} roles={roles} onLogout={handleLogout} />
+        <Dashboard token={token} roles={roles} userInfo={userInfo} onLogout={handleLogout} onUserInfoUpdate={handleUserInfoUpdate} />
       </ThemeProvider>
     );
   }
@@ -37,11 +49,23 @@ function App() {
     return (
       <ThemeProvider>
         <AuthView onLogin={handleLogin} />
-        <button 
+        <button
           onClick={() => setShowLogin(false)}
-          className="fixed top-4 right-4 z-[100] px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md transition-all"
+          style={{
+            position: 'fixed', top: '1.5rem', left: '1.5rem', zIndex: 200,
+            padding: '8px 20px',
+            background: 'var(--glass-bg)',
+            border: '1px solid var(--glass-border)',
+            borderRadius: '99px',
+            color: 'var(--text-primary)',
+            cursor: 'pointer', fontWeight: '700', fontSize: '0.85rem',
+            backdropFilter: 'blur(10px)',
+            display: 'flex', alignItems: 'center', gap: '6px',
+            transition: 'all 0.2s',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          }}
         >
-          Back to Home
+          ← Back to Home
         </button>
       </ThemeProvider>
     );
@@ -49,10 +73,7 @@ function App() {
 
   return (
     <ThemeProvider>
-      <div onClick={() => {
-        // If the user clicks "Get Started" or similar, we can trigger login
-        // For now, I'll add a listener or just rely on a button in LandingPage if I can pass it down
-      }}>
+      <div>
         <LandingPage onShowLogin={() => setShowLogin(true)} />
       </div>
     </ThemeProvider>

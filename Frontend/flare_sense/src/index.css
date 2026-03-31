@@ -1,24 +1,24 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;700;900&family=JetBrains+Mono:wght@400;500;700;800&family=Space+Grotesk:wght@500;700;900&display=swap');
+/* Fonts are now set to Times New Roman globally */
 
 :root {
   /* DARK THEME (DEFAULT) */
-  --bg-color: #010409;
-  --glass-bg: rgba(13, 17, 23, 0.6);
+  --bg-color: #02040a;
+  --glass-bg: rgba(13, 17, 30, 0.7);
   --glass-border: rgba(48, 54, 61, 0.8);
-  --glass-highlight: rgba(255, 255, 255, 0.1);
+  --glass-highlight: rgba(255, 255, 255, 0.05);
   --accent-red: #ff3366;
   --accent-orange: #ffaa00;
   --accent-blue: #00d2ff;
   --accent-green: #00ffaa;
   --text-primary: #f0f6fc;
   --text-secondary: #8b949e;
-  --panel-bg: rgba(13, 17, 23, 0.75);
-  --nav-bg: rgba(9, 11, 15, 0.85);
+  --panel-bg: rgba(13, 17, 30, 0.8);
+  --nav-bg: rgba(9, 11, 20, 0.9);
   --contrast-text: #ffffff;
 
-  --font-heading: 'Outfit', sans-serif;
-  --font-body: 'Inter', sans-serif;
+  --font-heading: 'Times New Roman', Times, serif;
+  --font-body: 'Times New Roman', Times, serif;
   --transition-speed: 0.4s;
 }
 
@@ -28,22 +28,22 @@ body {
 }
 
 body.light-mode {
-  /* LIGHT THEME OVERRIDES */
-  --bg-color: #f0f2f5;
-  --glass-bg: rgba(255, 255, 255, 0.8);
-  --glass-border: rgba(0, 0, 0, 0.1);
-  --glass-highlight: rgba(0, 0, 0, 0.05);
-  --text-primary: #1a1a1a;
-  --text-secondary: #4a4a4a;
-  --panel-bg: rgba(255, 255, 255, 0.9);
-  --nav-bg: rgba(245, 247, 249, 0.95);
-  --contrast-text: #1a1a1a;
+  /* LIGHT THEME OVERRIDES - CLEAN NEUTRAL WHITE */
+  --bg-color: #f4f4f6;
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(0, 0, 0, 0.09);
+  --glass-highlight: rgba(255, 255, 255, 0.9);
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --panel-bg: rgba(255, 255, 255, 0.85);
+  --nav-bg: rgba(255, 255, 255, 0.97);
+  --contrast-text: #111827;
   
-  --accent-blue: #0077ff;
-  --accent-green: #009966;
-  --accent-red: #cc0033;
-  --bg-gradient: radial-gradient(circle at 0% 0%, rgba(0, 119, 255, 0.05), transparent 50%),
-                 radial-gradient(circle at 100% 100%, rgba(204, 0, 51, 0.05), transparent 50%);
+  --accent-blue: #2563eb;
+  --accent-green: #059669;
+  --accent-red: #dc2626;
+  --bg-gradient: radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.06), transparent 50%),
+                 radial-gradient(circle at 100% 100%, rgba(5, 150, 105, 0.06), transparent 50%);
 }
 
 html {
