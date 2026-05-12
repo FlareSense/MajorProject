@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Dashboard from './Dashboard';
 import AuthView from './components/AuthView';
 import LandingPage from './LandingPage';
+import ChatbotWidget from './components/ChatbotWidget';
 import { ThemeProvider } from './context/ThemeContext';
 import './index.css';
 
@@ -41,6 +42,7 @@ function App() {
     return (
       <ThemeProvider>
         <Dashboard token={token} roles={roles} userInfo={userInfo} onLogout={handleLogout} onUserInfoUpdate={handleUserInfoUpdate} />
+        <ChatbotWidget />
       </ThemeProvider>
     );
   }
@@ -67,6 +69,7 @@ function App() {
         >
           ← Back to Home
         </button>
+        <ChatbotWidget />
       </ThemeProvider>
     );
   }
@@ -76,6 +79,7 @@ function App() {
       <div>
         <LandingPage onShowLogin={() => setShowLogin(true)} />
       </div>
+      <ChatbotWidget />
     </ThemeProvider>
   );
 }

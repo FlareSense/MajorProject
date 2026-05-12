@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Flame, AlertTriangle, Activity, Camera, ShieldCheck, Thermometer, Users, Box, Map as MapIcon, Download, LogOut, Search, Bell, User } from 'lucide-react';
+import { motion } from 'framer-motion';
 import AnalyticsMap from './components/AnalyticsMap';
 import FireDetailsModal from './components/FireDetailsModal';
 import IncidentDetailsModal from './components/IncidentDetailsModal';
@@ -258,7 +259,7 @@ const Dashboard = ({ token, roles, userInfo, onLogout, onUserInfoUpdate }) => {
                     >
                         <MapIcon size={20} /> Analytics
                     </button>
-                    {roles && roles.includes('ROLE_ADMIN') && (
+                    {roles && (roles.includes('ROLE_ADMIN') || roles.includes('ROLE_USER')) && (
                         <button
                             className={activeView === 'users' ? 'active' : ''}
                             onClick={() => setActiveView('users')}
@@ -266,7 +267,7 @@ const Dashboard = ({ token, roles, userInfo, onLogout, onUserInfoUpdate }) => {
                             <Users size={20} /> Residents
                         </button>
                     )}
-                    {roles && roles.includes('ROLE_ADMIN') && (
+                    {roles && (roles.includes('ROLE_ADMIN') || roles.includes('ROLE_USER')) && (
                         <button
                             className={activeView === 'settings' ? 'active' : ''}
                             onClick={() => setActiveView('settings')}
@@ -283,13 +284,6 @@ const Dashboard = ({ token, roles, userInfo, onLogout, onUserInfoUpdate }) => {
                 </div>
 
                 <div className="sidebar-footer" style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                    <div className={`system-status ${!isAnyThreatDetected ? 'breathing' : ''}`} style={{ padding: '16px', borderRadius: '16px', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-primary)' }}>
-                        <ShieldCheck size={20} color={getOverallStatusColor()} />
-                        <span style={{ fontSize: '0.8rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                            {isAnyThreatDetected ? (isAnyEvacuationNeeded ? "EVACUATION" : "THREAT") : "Secure"}
-                        </span>
-                    </div>
-
                     <div className="user-profile-nav">
                         <div className="avatar">
                             {roles.includes('ROLE_ADMIN') ? 'AD' : 'RS'}
@@ -309,10 +303,17 @@ const Dashboard = ({ token, roles, userInfo, onLogout, onUserInfoUpdate }) => {
             <main className="main-content">
                 {/* Global Header */}
                 <header className="global-header">
-                    <div className="header-left">
+                    <div className="header-left" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '900', textTransform: 'capitalize', color: 'var(--text-primary)' }}>
                             {activeView}
                         </h2>
+                        {/* Mobile and Desktop System Status Component */}
+                        <div className={`system-status ${!isAnyThreatDetected ? 'breathing' : ''}`} style={{ padding: '8px 16px', borderRadius: '99px', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', cursor: 'default' }}>
+                            <ShieldCheck size={18} color={getOverallStatusColor()} />
+                            <span style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                {isAnyThreatDetected ? (isAnyEvacuationNeeded ? "EVACUATION" : "THREAT") : "Secure"}
+                            </span>
+                        </div>
                     </div>
                     <div className="header-right header-actions">
                         {/* Search bar */}
@@ -546,17 +547,25 @@ const Dashboard = ({ token, roles, userInfo, onLogout, onUserInfoUpdate }) => {
                             <div style={{ animation: 'slideUpFade 0.6s ease-out' }}>
                                 {/* LIVE STATS BAR */}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '30px' }}>
-                                    {statCards.map(({ label, value, icon: Icon, color, bg, border, pulse }) => (
-                                        <div key={label} className={`glass-panel ${pulse ? 'breathing' : ''}`} style={{
-                                            padding: '24px',
-                                            border: `1px solid ${border}`,
-                                            background: bg,
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            gap: '14px',
-                                            position: 'relative',
-                                            overflow: 'hidden',
-                                        }}>
+                                    {statCards.map(({ label, value, icon: Icon, color, bg, border, pulse }, idx) => (
+                                        <motion.div 
+                                            key={label} 
+                                            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                            whileHover={{ y: -8, scale: 1.02, boxShadow: `0 20px 40px ${color}25`, borderColor: `${color}60` }}
+                                            transition={{ duration: 0.5, delay: idx * 0.1, ease: 'easeOut' }}
+                                            className={`glass-panel ${pulse ? 'breathing' : ''}`} 
+                                            style={{
+                                                cursor: 'pointer',
+                                                padding: '24px',
+                                                border: `1px solid ${border}`,
+                                                background: bg,
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '14px',
+                                                position: 'relative',
+                                                overflow: 'hidden',
+                                            }}>
                                             {/* Glow orb */}
                                             <div style={{
                                                 position: 'absolute', top: '-20px', right: '-20px',
@@ -595,13 +604,15 @@ const Dashboard = ({ token, roles, userInfo, onLogout, onUserInfoUpdate }) => {
                                                     {label}
                                                 </div>
                                             </div>
-                                        </div>
+                                        </motion.div>
                                     ))}
                                 </div>
 
                                 {/* MISSION CARDS */}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', marginBottom: '30px' }}>
-                                    <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                    <motion.div 
+                                        initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -10, boxShadow: '0 25px 50px rgba(255, 51, 102, 0.15)', borderColor: 'rgba(255, 51, 102, 0.3)' }} transition={{ duration: 0.6, delay: 0.3 }}
+                                        className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '15px', cursor: 'default' }}>
                                         <div style={{ background: 'rgba(255, 51, 102, 0.1)', width: '50px', height: '50px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                             <AlertTriangle size={28} color="var(--accent-red)" />
                                         </div>
@@ -609,8 +620,10 @@ const Dashboard = ({ token, roles, userInfo, onLogout, onUserInfoUpdate }) => {
                                         <p style={{ color: 'var(--text-secondary)', lineHeight: '1.6', fontSize: '0.95rem', margin: 0 }}>
                                             Every year, uncontrolled fires destroy over <strong>4 million hectares</strong> of land. Traditional smoke detectors activate 5–10 minutes too late for structural salvation.
                                         </p>
-                                    </div>
-                                    <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                    </motion.div>
+                                    <motion.div 
+                                        initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -10, boxShadow: '0 25px 50px rgba(0, 210, 255, 0.15)', borderColor: 'rgba(0, 210, 255, 0.3)' }} transition={{ duration: 0.6, delay: 0.4 }}
+                                        className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '15px', cursor: 'default' }}>
                                         <div style={{ background: 'rgba(0, 210, 255, 0.1)', width: '50px', height: '50px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                             <Activity size={28} color="var(--accent-blue)" />
                                         </div>
@@ -618,8 +631,10 @@ const Dashboard = ({ token, roles, userInfo, onLogout, onUserInfoUpdate }) => {
                                         <p style={{ color: 'var(--text-secondary)', lineHeight: '1.6', fontSize: '0.95rem', margin: 0 }}>
                                             Our custom <strong>YOLOv11 Architecture</strong> analyzes 30 fps. By detecting thermal blooming and particulate strings, we cut response times by up to <strong>85%</strong>.
                                         </p>
-                                    </div>
-                                    <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                    </motion.div>
+                                    <motion.div 
+                                        initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -10, boxShadow: '0 25px 50px rgba(0, 255, 170, 0.15)', borderColor: 'rgba(0, 255, 170, 0.3)' }} transition={{ duration: 0.6, delay: 0.5 }}
+                                        className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '15px', cursor: 'default' }}>
                                         <div style={{ background: 'rgba(0, 255, 170, 0.1)', width: '50px', height: '50px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                             <Flame size={28} color="var(--accent-green)" />
                                         </div>
@@ -627,7 +642,7 @@ const Dashboard = ({ token, roles, userInfo, onLogout, onUserInfoUpdate }) => {
                                         <p style={{ color: 'var(--text-secondary)', lineHeight: '1.6', fontSize: '0.95rem', margin: 0 }}>
                                             Detected threats trigger immediate broadcasts via <strong>WhatsApp, Telegram, and SMS</strong> with high-resolution visual evidence on secure cloud CDN.
                                         </p>
-                                    </div>
+                                    </motion.div>
                                 </div>
 
                                 {/* TECH STACK */}
@@ -675,7 +690,12 @@ const Dashboard = ({ token, roles, userInfo, onLogout, onUserInfoUpdate }) => {
                         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(300px, 1fr)', gap: '24px', width: '100%', alignItems: 'start' }}>
                             
                             {/* LEFT COLUMN: CAMERAS FOCUS */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                            <motion.div 
+                                initial={{ opacity: 0, x: -30 }} 
+                                animate={{ opacity: 1, x: 0 }} 
+                                transition={{ duration: 0.5, ease: "easeOut" }}
+                                style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}
+                            >
                                 {Object.keys(cameras).map(camId => {
                                     const camInfo = cameras[camId];
                                     const status = systemStatus[camId] || {};
@@ -782,10 +802,16 @@ const Dashboard = ({ token, roles, userInfo, onLogout, onUserInfoUpdate }) => {
                                         </div>
                                     )
                                 })}
-                            </div>
+                            </motion.div>
 
                             {/* RIGHT COLUMN: EVENT LOG (STICKY) */}
-                            <div className="alerts-section glass-panel" style={{ position: 'sticky', top: '24px', maxHeight: 'calc(100vh - 48px)', display: 'flex', flexDirection: 'column', padding: '0', overflow: 'hidden' }}>
+                            <motion.div 
+                                initial={{ opacity: 0, x: 30 }} 
+                                animate={{ opacity: 1, x: 0 }} 
+                                transition={{ duration: 0.5, delay: 0.2, ease: "easeOut" }}
+                                className="alerts-section glass-panel" 
+                                style={{ position: 'sticky', top: '24px', maxHeight: 'calc(100vh - 48px)', display: 'flex', flexDirection: 'column', padding: '0', overflow: 'hidden' }}
+                            >
                                 <div style={{ padding: '24px', borderBottom: '1px solid var(--glass-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(120,120,120,0.03)' }}>
                                     <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-primary)' }}>
                                         <AlertTriangle size={22} color="var(--accent-blue)" /> Global Events
@@ -819,7 +845,7 @@ const Dashboard = ({ token, roles, userInfo, onLogout, onUserInfoUpdate }) => {
                                         </div>
                                     ))}
                                 </div>
-                            </div>
+                            </motion.div>
 
                         </div>
                     )}
@@ -1122,7 +1148,7 @@ const Dashboard = ({ token, roles, userInfo, onLogout, onUserInfoUpdate }) => {
                     })()}
 
                     {/* VIEW: RESIDENT MANAGEMENT */}
-                    {activeView === 'users' && roles.includes('ROLE_ADMIN') && (
+                    {activeView === 'users' && (roles.includes('ROLE_ADMIN') || roles.includes('ROLE_USER')) && (
                         <div style={{ animation: 'slideUpFade 0.6s ease-out', display: 'flex', flexDirection: 'column', gap: '30px' }}>
                             <div className="panel-header" style={{ marginBottom: '10px' }}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
@@ -1138,63 +1164,65 @@ const Dashboard = ({ token, roles, userInfo, onLogout, onUserInfoUpdate }) => {
                                 </div>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '30px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: roles.includes('ROLE_ADMIN') ? '1fr 2fr' : '1fr', gap: '30px' }}>
                                 {/* Enrollment Form */}
-                                <div className="glass-panel" style={{ padding: '25px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                                    <h3 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-primary)' }}>Enroll New Resident</h3>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                                        <input 
-                                            placeholder="Username" 
-                                            className="glass-input" 
-                                            value={userForm.username}
-                                            onChange={e => setUserForm({...userForm, username: e.target.value})}
-                                        />
-                                        <input 
-                                            placeholder="Email" 
-                                            className="glass-input" 
-                                            value={userForm.email}
-                                            onChange={e => setUserForm({...userForm, email: e.target.value})}
-                                        />
-                                        <input 
-                                            type="password"
-                                            placeholder="Password" 
-                                            className="glass-input" 
-                                            value={userForm.password}
-                                            onChange={e => setUserForm({...userForm, password: e.target.value})}
-                                        />
-                                        <select 
-                                            className="glass-input" 
-                                            value={userForm.role}
-                                            onChange={e => setUserForm({...userForm, role: e.target.value})}
-                                        >
-                                            <option value="user">Rental User</option>
-                                            <option value="admin">Apartment Owner (Admin)</option>
-                                        </select>
-                                        <button 
-                                            className="vibrant-btn"
-                                            onClick={() => {
-                                                fetch('http://localhost:8080/api/admin/users', {
-                                                    method: 'POST',
-                                                    headers: { 
-                                                        'Content-Type': 'application/json',
-                                                        'Authorization': `Bearer ${token}` 
-                                                    },
-                                                    body: JSON.stringify(userForm)
-                                                })
-                                                .then(res => res.json())
-                                                .then(data => {
-                                                    alert(data.message);
-                                                    if (!data.message.includes("Error") && !data.message.includes("Max")) {
-                                                        fetchUsers();
-                                                        setUserForm({ username: '', password: '', email: '', role: 'user' });
-                                                    }
-                                                });
-                                            }}
-                                        >
-                                            GENERATE CLEARANCE
-                                        </button>
+                                {roles.includes('ROLE_ADMIN') && (
+                                    <div className="glass-panel" style={{ padding: '25px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                        <h3 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-primary)' }}>Enroll New Resident</h3>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                            <input 
+                                                placeholder="Username" 
+                                                className="glass-input" 
+                                                value={userForm.username}
+                                                onChange={e => setUserForm({...userForm, username: e.target.value})}
+                                            />
+                                            <input 
+                                                placeholder="Email" 
+                                                className="glass-input" 
+                                                value={userForm.email}
+                                                onChange={e => setUserForm({...userForm, email: e.target.value})}
+                                            />
+                                            <input 
+                                                type="password"
+                                                placeholder="Password" 
+                                                className="glass-input" 
+                                                value={userForm.password}
+                                                onChange={e => setUserForm({...userForm, password: e.target.value})}
+                                            />
+                                            <select 
+                                                className="glass-input" 
+                                                value={userForm.role}
+                                                onChange={e => setUserForm({...userForm, role: e.target.value})}
+                                            >
+                                                <option value="user">Rental User</option>
+                                                <option value="admin">Apartment Owner (Admin)</option>
+                                            </select>
+                                            <button 
+                                                className="vibrant-btn"
+                                                onClick={() => {
+                                                    fetch('http://localhost:8080/api/admin/users', {
+                                                        method: 'POST',
+                                                        headers: { 
+                                                            'Content-Type': 'application/json',
+                                                            'Authorization': `Bearer ${token}` 
+                                                        },
+                                                        body: JSON.stringify(userForm)
+                                                    })
+                                                    .then(res => res.json())
+                                                    .then(data => {
+                                                        alert(data.message);
+                                                        if (!data.message.includes("Error") && !data.message.includes("Max")) {
+                                                            fetchUsers();
+                                                            setUserForm({ username: '', password: '', email: '', role: 'user' });
+                                                        }
+                                                    });
+                                                }}
+                                            >
+                                                GENERATE CLEARANCE
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
 
                                 {/* Residents Table */}
                                 <div className="glass-panel" style={{ padding: '0', overflow: 'hidden' }}>
@@ -1204,7 +1232,9 @@ const Dashboard = ({ token, roles, userInfo, onLogout, onUserInfoUpdate }) => {
                                                 <th style={{ padding: '20px', color: 'var(--text-secondary)', fontSize: '0.72rem', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '1px' }}>IDENTIFIER</th>
                                                 <th style={{ padding: '20px', color: 'var(--text-secondary)', fontSize: '0.72rem', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '1px' }}>CONTACT</th>
                                                 <th style={{ padding: '20px', color: 'var(--text-secondary)', fontSize: '0.72rem', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '1px' }}>TIER</th>
-                                                <th style={{ padding: '20px', color: 'var(--text-secondary)', fontSize: '0.72rem', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '1px' }}>ACTIONS</th>
+                                                {roles.includes('ROLE_ADMIN') && (
+                                                    <th style={{ padding: '20px', color: 'var(--text-secondary)', fontSize: '0.72rem', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '1px' }}>ACTIONS</th>
+                                                )}
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1222,16 +1252,18 @@ const Dashboard = ({ token, roles, userInfo, onLogout, onUserInfoUpdate }) => {
                                                             {user.roles.includes('ROLE_ADMIN') ? 'OWNER' : 'RENTAL'}
                                                         </span>
                                                     </td>
-                                                    <td style={{ padding: '20px' }}>
-                                                        {!user.roles.includes('ROLE_ADMIN') && (
-                                                            <button 
-                                                                onClick={() => deleteUser(user.id)}
-                                                                style={{ background: 'transparent', border: '1px solid rgba(255, 51, 102, 0.3)', color: 'var(--accent-red)', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '700' }}
-                                                            >
-                                                                TERMINATE
-                                                            </button>
-                                                        )}
-                                                    </td>
+                                                    {roles.includes('ROLE_ADMIN') && (
+                                                        <td style={{ padding: '20px' }}>
+                                                            {!user.roles.includes('ROLE_ADMIN') && (
+                                                                <button 
+                                                                    onClick={() => deleteUser(user.id)}
+                                                                    style={{ background: 'transparent', border: '1px solid rgba(255, 51, 102, 0.3)', color: 'var(--accent-red)', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '700' }}
+                                                                >
+                                                                    TERMINATE
+                                                                </button>
+                                                            )}
+                                                        </td>
+                                                    )}
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -1242,7 +1274,7 @@ const Dashboard = ({ token, roles, userInfo, onLogout, onUserInfoUpdate }) => {
                     )}
 
                     {/* VIEW: TWILIO SETUP */}
-                    {activeView === 'settings' && roles.includes('ROLE_ADMIN') && (
+                    {activeView === 'settings' && (roles.includes('ROLE_ADMIN') || roles.includes('ROLE_USER')) && (
                         <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap', maxWidth: '1000px', margin: '0 auto' }}>
                             <div style={{ flex: '1 1 500px' }}>
                                 <TwilioSetup token={token} />

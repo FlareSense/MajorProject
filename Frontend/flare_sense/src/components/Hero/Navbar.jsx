@@ -4,7 +4,12 @@ import ThemeToggle from '../ThemeToggle';
 
 const Navbar = ({ onShowLogin }) => {
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 lg:px-12 py-5 bg-[var(--nav-bg)] backdrop-blur-2xl border-b border-[var(--glass-border)] shadow-2xl transition-colors duration-500">
+    <motion.nav 
+      initial={{ y: -100 }} 
+      animate={{ y: 0 }} 
+      transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+      className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 lg:px-12 py-5 bg-[var(--nav-bg)] backdrop-blur-2xl border-b border-[var(--glass-border)] shadow-2xl transition-colors duration-500"
+    >
         <div className="flex items-center gap-3">
             <img src="/logo.png" alt="FlareSense Logo" className="w-12 h-12 lg:w-16 lg:h-16 object-contain" />
             <span className="text-3xl lg:text-4xl font-extrabold tracking-tight text-[var(--text-primary)] uppercase">FlareSense</span>
@@ -38,7 +43,7 @@ const Navbar = ({ onShowLogin }) => {
                 Get Started for Free
             </button>
         </div>
-    </nav>
+    </motion.nav>
   );
 };
 

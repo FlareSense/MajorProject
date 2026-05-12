@@ -1,10 +1,17 @@
 import React from 'react';
 import { ShieldCheck } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const About = () => {
     return (
         <section id="about" className="py-24 bg-[var(--bg-color)] relative z-10 px-6 transition-colors duration-500">
-            <div className="max-w-4xl mx-auto text-center">
+            <motion.div 
+                initial={{ opacity: 0, scale: 0.95, y: 30 }}
+                whileInView={{ opacity: 1, scale: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.7, ease: "easeOut" }}
+                className="max-w-4xl mx-auto text-center"
+            >
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 text-blue-400 mb-8 border border-[var(--glass-border)] transition-colors">
                     <ShieldCheck size={32} />
                 </div>
@@ -20,7 +27,7 @@ const About = () => {
                         Every second counts, and we ensure security administrators and residents receive verified evidence instantaneously.
                     </p>
                 </div>
-            </div>
+            </motion.div>
         </section>
     );
 };

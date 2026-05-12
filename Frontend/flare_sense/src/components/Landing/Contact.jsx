@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Phone, MapPin, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const Contact = () => {
     const [formData, setFormData] = useState({ name: '', email: '', message: '' });
@@ -54,7 +55,12 @@ const Contact = () => {
     return (
         <section id="contact" className="py-24 bg-[var(--bg-color)]/95 border-t border-[var(--glass-border)] relative z-10 px-6 transition-colors duration-500">
             <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16">
-                <div>
+                <motion.div
+                    initial={{ opacity: 0, x: -50 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true, margin: "-50px" }}
+                    transition={{ duration: 0.7, ease: "easeOut" }}
+                >
                     <h2 className="text-4xl font-bold text-[var(--text-primary)] mb-6">Let's Get Connected</h2>
                     <p className="text-[var(--text-secondary)] text-lg mb-10 leading-relaxed font-light">
                         Ready to integrate cutting-edge fire AI scanning into your existing CCTV network? Reach out to our team to request a demo or explore deployment options.
@@ -88,9 +94,15 @@ const Contact = () => {
                             </div>
                         </div>
                     </div>
-                </div>
+                </motion.div>
 
-                <div className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-2xl p-8 lg:p-12 backdrop-blur-md transition-colors">
+                <motion.div 
+                    initial={{ opacity: 0, x: 50 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true, margin: "-50px" }}
+                    transition={{ duration: 0.7, ease: "easeOut", delay: 0.2 }}
+                    className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-2xl p-8 lg:p-12 backdrop-blur-md transition-colors"
+                >
                     <form className="space-y-6" onSubmit={handleSubmit}>
                         {status === 'success' && (
                             <div className="flex items-center gap-3 p-4 bg-green-500/10 border border-green-500/20 text-green-400 rounded-xl">
@@ -147,7 +159,7 @@ const Contact = () => {
                             {loading ? <><Loader2 size={20} className="animate-spin" /> Sending...</> : 'Send Request'}
                         </button>
                     </form>
-                </div>
+                </motion.div>
             </div>
         </section>
     );
