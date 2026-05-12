@@ -1,6 +1,6 @@
 from ultralytics import YOLO
 
-model = YOLO("best_v3.onnx")
+model = YOLO("best_final.onnx")
 CONFIDENCE_THRESHOLD = 0.35
 
 def detect_fire(frame):
